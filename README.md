@@ -37,6 +37,16 @@
 - 🫶 **听歌计数** — 听过几次、一起听完几次，都记账
 - 📱 移动端优先，可嵌 iframe 当聊天页的「一起听」抽屉（`music:*` postMessage 协议）
 
+## 长什么样
+
+| ☁️ 网易云日推 · 带推荐理由 | 🎤 歌词页 · 逐字点亮 + 翻译 |
+|:--:|:--:|
+| <img src="screenshots/01-discover.png" width="390" alt="每日推荐"> | <img src="screenshots/03-lyrics.png" width="390" alt="歌词页"> |
+| **✎ 批注本 · 两个人的听歌回忆** | **💬 歌曲评论区 · 热评＋最新** |
+| <img src="screenshots/04-notes.png" width="390" alt="批注本"> | <img src="screenshots/05-comments.png" width="390" alt="评论区"> |
+| **📋 本地歌单 · AI 也能往里收歌** | **🎬 MV 放映厅 · 可悬浮小窗** |
+| <img src="screenshots/02-playlists.png" width="390" alt="歌单"> | <img src="screenshots/06-mv.png" width="390" alt="MV"> |
+
 ## 快速开始
 
 ```bash
