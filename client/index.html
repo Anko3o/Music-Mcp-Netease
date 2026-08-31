@@ -7,7 +7,7 @@
 <style>
 /* ── CSS Variables / Theme ── */
 :root {
-  /* 2026-08-07 安可点单:吸主页配色。
+  /* Palette aligned with the companion site's home page.
      色卡与 reference/home-index.html 同根:
      深玫瑰灰 #6b4a55 / 柔雾粉棕 #85616f / 玫瑰 #c2708a / 深玫瑰 #984e68 / 奶油黄 #ffedc2,
      半透明奶白玻璃 + 1px 白边 + 柔粉阴影。Music 的主题落在「温柔唱片/音波」:
@@ -21,7 +21,7 @@
   --butter: #ffedc2;
   --accent: #984e68;                        /* 文字强调:深玫瑰,浅底上对比够(文字继续用它,别拿去刷按钮) */
   --accent-soft: #c2708a;                   /* 次级强调:玫瑰 */
-  --btn: #D26E88;                           /* 实心按钮统一色:抄 chat 的 --accent(「打开」那颗,8-18 安可
+  --btn: #D26E88;                           /* unified solid-button color */
                                                当场考试:「全站哪里用了播放键这个颜色」——答案是没有,
                                                #984e68 当按钮是音乐页黑户,全站正牌是这个) */
   --accent-tint: rgba(194, 112, 138, 0.14);
@@ -41,7 +41,7 @@
   --blur: blur(18px) saturate(1.14);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
 
-  /* ── 运动体系（2026-08-10 安可点单「借鉴 damso 的丝滑」）──
+  /* ── Motion system (damso-inspired easing) ──
      扒 damso.com 扒出来的配方：全站 19 处 expo.inOut、16 处 duration:1、Lenis lerp .12。
      我们原来是清一色 0.18s + 浏览器默认 ease —— 每个动作「啪」一下就完事，
      没有过程感，这才是「像小学生」的技术根因（不是粉色的错）。
@@ -49,7 +49,7 @@
      铁律：只动 transform 和 opacity。这两个走合成器，不触发布局。
      歌词行原本 transition 里带 font-size，每帧重排整列，移动端必卡 —— 已改 scale。
 
-     安可 8-10 定的施工序：先把交互做出来，时长最后一起扣。
+        Interaction first, timing tuned at the end.
      所以时长全部收在这四个变量里，调一处全站跟着走。 */
   --ease-out:    cubic-bezier(.16, 1, .3, 1);      /* ≈ expo.out：猛起步、极缓收尾，主力 */
   --ease-in-out: cubic-bezier(.87, 0, .13, 1);     /* ≈ expo.inOut：转场用，两头都稳 */
@@ -77,7 +77,7 @@ html, body {
   overflow: hidden;
   -webkit-tap-highlight-color: transparent;
   -webkit-text-size-adjust: 100%;
-  /* 8-18 安可红笔两连:「像小学生」的是背景(三 radial 彩虹渐变),换水彩纸又被「不要贴鸭」
+  /* Background: watercolor paper (several earlier attempts retired).
      ——最终按参考图一号来:一块干净的素粉,什么都不贴什么都不叠。
      玻璃卡的层次交给卡自己的白边和粉影,不靠背景花活。 */
   background: #fbeff4;
@@ -560,7 +560,7 @@ body.embedded .ly-controls { padding: 6px 20px calc(var(--safe-bottom) + 10px); 
 .song-rm { background: none; border: none; color: var(--faint); flex-shrink: 0; padding: 10px 4px; }
 .song-rm:active { color: var(--bad); transform: scale(0.92); }
 
-/* ── 歌单详情 · 大头卡(8-18 安可点单「参考图那种排版,玻璃风格」)──
+/* ── Playlist detail hero card (glass style) ──
    一张大玻璃卡:封面 + PLAYLIST 眉题 + 歌单名 + 「♡ N songs」+ 圆形播放钮;
    列表顶上加一行列头(# TITLE ♡),唱片行目录页的做派。 */
 .pl-hero {
@@ -707,7 +707,7 @@ body.window-mini .np-eyebrow { display: none; }
 }
 .ly-mem-btn:active { transform: scale(0.9); }
 /* 歌词页右上角工具排:从两颗长到五颗(♥✎💬🎬➕),8-31 收尾针二连:
-   安可:「左三(评论区)飞出去了」——全排缩号收腰,谁也不许再越狱 */
+      Compact sizing so all five buttons fit narrow screens. */
 .ly-head-tools { display: flex; align-items: center; gap: 5px; flex-wrap: nowrap; min-width: 0; }
 .ly-head-tools .ly-mem-btn { width: 32px; height: 32px; flex: 0 0 auto; }
 .ly-head-tools .ly-mem-btn svg { width: 15px; height: 15px; }
@@ -721,7 +721,7 @@ body.window-mini .np-eyebrow { display: none; }
 .np-like-btn:active { transform: scale(0.85); }
 .ly-cover-area { display: flex; align-items: center; gap: 14px; padding: 2px 20px 16px; flex-shrink: 0; }
 
-/* ── 唱片（2026-08-10 安可点单，她排的第一位）──
+/* ── Vinyl disc (retired; kept for reference) ──
    原来是 58px 圆角小方块，静止不动，看不出这是个「在放歌」的地方。
    现在是一张会转的唱片：封面裁成圆、中心一个孔、外圈一道压印。
 
@@ -761,7 +761,7 @@ body.window-mini .np-eyebrow { display: none; }
 @media (prefers-reduced-motion: reduce) {
   .ly-disc.spinning { animation: none; }
 }
-/* ── 歌词页大头卡 + 底部甲板(8-18 安可点单:参考图排版,玻璃;唱片她判「转转转一般般」退休)── */
+/* ── Lyrics hero card + bottom deck (glass style) ── */
 .ly-card {
   flex: 1; min-width: 0; display: flex; align-items: center; gap: 14px;
   padding: 14px 16px;
@@ -794,7 +794,7 @@ body.window-mini .np-eyebrow { display: none; }
   font-size: 10px; color: var(--muted); white-space: nowrap;
 }
 .ly-time-combo i { font-style: normal; margin: 0 2px; opacity: .6; }
-/* 兔头滑块二稿(安可:「实心兔头!水彩兔色系对不上」):内联 SVG 剪影,
+/* Rabbit seek thumb: inline SVG silhouette,
    颜色吃 --btn,和播放钮/进度线一个血——纯矢量,没有贴图色差问题 */
 .ly-deck .ly-seek-thumb {
   width: 22px; height: 22px; border: none; border-radius: 0;
@@ -831,7 +831,7 @@ body.window-mini .np-eyebrow { display: none; }
    这两个走合成器，不碰布局。所以字号固定，大小差交给 scale。
    字重也不再跳（600↔500 会改变文字宽度 → 长句重新换行 → 整列抖），
    层次改由 opacity + 颜色 + 缩放三样一起给。 */
-/* 8-10 安可加点：「私心其实想要歌词居中」。
+/* Centered lyrics layout. */
    居中后 transform-origin 必须跟着改成 center —— 还留 left center 的话，
    放大时整行会往右甩，看着像在抖。 */
 .ly-line {
@@ -854,9 +854,9 @@ body.window-mini .np-eyebrow { display: none; }
   font-size: 12px; opacity: 0.65; margin-top: 2px; font-weight: 400; color: var(--ink-soft);
 }
 .ly-line.active .ly-trans { opacity: 0.85; color: var(--accent-soft); }
-/* ── 8-31 文字PV动效＋封面糊底(安可:「背景做成封面模糊很多倍不就好了嘛」)──
-   封面放大重糊铺满歌词页,叠一层奶纱保字色——跟聊天页壁纸同一条家规。 */
-/* 8-31 收尾针(安可:「长按分享总弹出谷歌的长按选中复制」):歌词行免疫原生选中,长按完整归选句分享 */
+/* ── Per-character lyric animation ──
+   封面放大重糊铺满歌词页,再叠一层浅色纱保证文字可读。 */
+/* Lyric lines opt out of native text selection: long-press belongs to line-sharing. */
 .ly-line { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 .ly-w { display: inline-block; white-space: pre; }   /* 词包字:英文单词不从中间拆行 */
 .ly-ch { display: inline-block; white-space: pre; }  /* 平时就是普通字,激活才有戏 */
@@ -864,10 +864,10 @@ body.window-mini .np-eyebrow { display: none; }
   opacity: 0; animation: lyChar .34s cubic-bezier(.2,.8,.2,1) var(--d, 0ms) forwards;
 }
 @keyframes lyChar {
-  /* 8-31 提速二针:不透明度在前 45% 拉满(字先看清),位移把余下动作演完。
-     三针(安可:「优化之后动画卡起来了」):per-char 的 filter:blur 动画要逐帧重画,
+  /* 速度优化:不透明度在动画前 45% 拉满(文字尽快可读),位移把余下动作演完。
+        Note: per-char filter:blur animations repaint every frame —
      翻译行加入后 30+ 个字同跑直接压垮手机——拆掉 blur,只动 transform 和 opacity,
-     这本来就是家里的动效家规(plus-drawer.css 白纸黑字),犯规的还是立规的人,丢脸存档 */
+     动效原则:只动 transform 和 opacity,不做逐帧重画的 filter 动画。 */
   0%   { opacity: 0; transform: translateY(.4em) rotate(3deg); }
   45%  { opacity: 1; }
   100% { opacity: 1; transform: none; }
@@ -894,7 +894,7 @@ body.window-mini .np-eyebrow { display: none; }
   flex: 0 0 auto; width: 26px; height: 26px; border: 0; border-radius: 50%;
   background: transparent; color: var(--muted); font-size: 13px; cursor: pointer;
 }
-/* ── 8-31 播放器内直聊小条(偷师果果家) ── */
+/* ── In-player line chat bar ── */
 .ly-chatline {
   position: sticky; bottom: 0; z-index: 5;
   margin: 8px 12px; padding: 10px 12px;
@@ -1032,7 +1032,7 @@ body.window-mini .np-eyebrow { display: none; }
 .sm-notes {
   font-size: 13.5px; line-height: 1.7; color: var(--ink);
   padding: 12px 14px; white-space: pre-wrap;
-  /* 8-31 六针:批注是拿来读的,给它一张纸卡,别再躲在输入框里 */
+/* Notes are for reading: display existing notes as a card, not inside the input. */
   background: rgba(255, 255, 255, .55); border: 1px solid var(--line);
   border-radius: 14px; margin-bottom: 10px;
 }
@@ -1056,7 +1056,7 @@ body.window-mini .np-eyebrow { display: none; }
 .sm-loading, .sm-empty {
   text-align: center; color: var(--muted); padding: 60px 0; font-size: 13px;
 }
-/* ── 8-31 兔牙家 remake：批注手写件 ＋ 评论区 ── */
+/* ── Notes editor + comments panel ── */
 .sm-edit {
   width: 100%; box-sizing: border-box; margin: 10px 0 0;
   padding: 12px 14px; font: inherit; font-size: 13.5px; line-height: 1.7; color: var(--ink);
@@ -1149,14 +1149,14 @@ button:active,
 .recent-row:active, .song-row:active, .pls-row:active { transform: scale(0.978); }
 
 /* ── 拆卡片 ──
-   安可 8-10：「太像小学生」。诊断下来最重的一条不是配色，是「万物皆卡片」：
+      Design pass: fewer nested cards, one glass container per view.
    每个元素都要一个白边 + 阴影 + 圆角的框装起来，框里再套框。
    实拍数到三层套娃：.song-list 一张大玻璃卡，里面每个 .pls-row / .recent-row
    又各是一张带边框和阴影的小卡 —— 一屏里能数出十几个「框」。
    damso 的做法是内容直接落在底上，靠间距、字号、留白分层，一个框都不画。
 
    下面把常驻的底色/描边/阴影全卸掉，只在手指真的碰到时才给一点回应。 */
-/* 8-18 修订:安可点单玻璃排版(参考图是一张大玻璃盘装整个列表),
+/* Glass layout revision:
    .song-list 从卸妆名单里请回去——大盘子回归,行仍是无框平铺在盘内,
    「一张盘 + 平铺行」正是参考图的层级,不是 8-10 拆掉的那种三层套娃。 */
 .home-card,
@@ -1209,7 +1209,7 @@ window.TUTOOTH_MUSIC_VERSION = '2026-08-10.1';
      迷你窗   —— body.window-mini，整窗缩成一块玫瑰奶糖（8-08 已有）
      抽屉里   —— body.embedded，聊天页「一起听」的 iframe
 
-   2026-08-10 安可点单：「做的时候要考虑 chat 页的一起听功能，能不能显示完整，
+   /* Embeddable: the player also runs inside a chat page drawer via iframe.
    该去的图标就去掉，毕竟 chat 页比较小塞不了那么多」，随后补了设计原则：
    「缩成一个小胶囊的时候人家就只显示播放列表和歌词了，在音乐的主页面才给看个人主页」。
    ——所以抽屉不是「等比缩小」，是「按场景裁功能」：她在抽屉里是来听的，不是来逛的。
@@ -1227,7 +1227,7 @@ const isEmbedded = (() => {
 
 // ── API helpers ──
 async function api(path, opts) {
-  // Music 与兔牙主页共用 Caddy 门禁；浏览器不再各自保存第二枚 Eryu token。
+  // Reuses the host site's reverse-proxy auth; the browser holds no second token.
   const res = await fetch(path, { ...opts, headers: { ...(opts?.headers || {}) } });
   let data = {};
   try { data = await res.json(); } catch {}
@@ -1289,9 +1289,9 @@ const state = {
 function notify() { state.listeners.forEach(fn => fn()); }
 function notifySong() { state.songListeners.forEach(fn => fn(state.song)); postSongToParent(); }
 
-/* ── 对外广播当前歌(2026-08-08 安可点单「想分享歌曲给小雾」)──────────────
+/* ── Broadcast current song to parent page ──
    聊天页把播放器嵌成 iframe 抽屉,靠这条 postMessage 知道现在在放什么,
-   才能一键把歌递给小雾。同源,但仍显式指定 targetOrigin,不用 '*'。
+      Same-origin, but still uses an explicit targetOrigin instead of '*'.
    父页也可以主动喊一声 {type:'eryu:ask'},这边立刻回一条当前状态。 */
 function songSnapshot() {
   const s = state.song;
@@ -1307,7 +1307,7 @@ function postSongToParent() {
     window.parent.postMessage({ type: 'eryu:song', song: songSnapshot() }, location.origin);
   } catch {}
 }
-/* ── 报「现在唱到哪一句」(2026-08-08 安可点单「时间戳附近自动读取歌词,一起聊歌词」)──
+/* ── Report the currently-sung lyric line to the parent page ──
    歌词本来只在打开歌词页时才解析(loadLyrics),所以这里自己按需取一份并缓存,
    不逼她先点开歌词页。连原文带翻译一起给,前后各带一句当上下文。 */
 let lyricSnapCache = { songId: '', lines: [], trans: new Map() };
@@ -1350,7 +1350,7 @@ async function postLyricNow() {
   try { window.parent.postMessage(payload, location.origin); } catch {}
 }
 
-/* 8-31 安可:「能不能自选歌词发送」→ 同晚升级(她:「这个歌词更顺!抄!」,偷师果果家):
+/* Long-press any lyric line to share it (with surrounding lines + translation):
    长按选句不再跑回聊天页——歌词页里浮出小输入条,想说的话就地写,「递过去」直接寄出
    (eryu:lyric-send → 聊天端立发,带她的话和整包歌词)。 */
 let lyChatIdx = -1;
@@ -1404,8 +1404,8 @@ window.addEventListener('message', (ev) => {
   if (d.type === 'eryu:lyric-now') postLyricNow();
   // 聊天页的歌曲卡片点「一起听」时打过来:直接放这首(2026-08-08)
   if (d.type === 'eryu:play' && d.song && d.song.songId) {
-    // 8-31 安可的幻想成真款:歌词卡点一下,直接跳进那句的时间点(at 秒数随 eryu:play 捎来)。
-    // 五针(她报「弹回0:00/播0.5s又重播」):聊天页的双保险会把同一道 play 喊两次,
+    // Clickable lyric cards: jump straight to the shared line (seek time rides on eryu:play).
+    // The embedding page may send the same play command twice (iframe-ready double-shout);
     // 旧版每喊必重载=第二喊把歌拽回 0:00。现在**同曲免重载**:台上已是这首就不换碟,
     // 只在唱针离目标 3 秒开外才挪针——双喊、重复点卡都不再打断。
     const sid = String(d.song.songId);
@@ -1438,7 +1438,7 @@ audio.addEventListener('timeupdate', () => {
   state.duration = audio.duration || 0;
   state.progress = state.duration ? audio.currentTime / state.duration : 0;
   notify();
-  // 每秒给父页报一次进度,喂聊天页顶上那颗灵动岛胶囊(2026-08-08 安可点单)。
+  // Report playback progress to the parent page once per second.
   // timeupdate 一秒能跳四五次,不节流会把 postMessage 刷爆。
   if (window.parent !== window) {
     const now = Math.floor(state.currentTime);
@@ -1473,23 +1473,23 @@ audio.addEventListener('ended', () => {
   playNext();
 });
 
-let loadSeq = 0;   // 十针:连点两首时旧的取歌作废,晚到的 url 不许倒车覆盖
+let loadSeq = 0;   // stale-guard: when songs are tapped in quick succession, late URLs are discarded
 async function loadAndPlay(song) {
   if (!song || !song.songId) return;
   const my = ++loadSeq;
   state.song = song;
   notifySong();
-  // 8-31 兔牙家 remake:听歌计数接上电——上游有 /music/recent/add 记「最近在听+listenCount」,
+  // Listen counting: POST /music/recent/add on every play.
   // 但前端从来没喊过它,批注面板里的 0x played 就是这么来的。
   if (song.songId) apiPost('/music/recent/add', { song }).catch(() => {});
-  // 十针:第一次听的歌服务器要现从网易拉整个 mp3,可能好几秒——给个响,别让她以为坏了
+  // First play of a song downloads the full mp3 server-side (can take seconds) — show feedback.
   const slow = setTimeout(() => { if (loadSeq === my) showToast('取歌中…第一次听的歌要现搬'); }, 700);
   try {
     const d = await api('/music/url?id=' + song.songId);
     clearTimeout(slow);
     if (loadSeq !== my) return;          // 她已经点了别的,这趟作废
     if (d.url) {
-      // 同源音频请求会沿用兔牙家的登录，内部 Eryu token 由 Caddy 安全注入。
+      // Same-origin audio requests reuse the host site's auth.
       audio.src = d.url;
       audio.play().catch(() => {});
     } else {
@@ -1511,7 +1511,7 @@ function setQueue(songs) { state.queue = songs.slice(); renderNpBar(); }
 function addToQueue(song) { state.queue.push(song); showToast('排进「接下来播」了'); renderNpBar(); if (typeof renderQueue === 'function') renderQueue(); }
 
 async function playNext() {
-  // 八针顺位:①优先队列(手动/远程插的) ②播放上下文(按模式) ③漫游
+  // Order: ① manual priority queue ② playlist context (by play mode) ③ roam fallback
   if (state.queue.length > 0) {
     if (state.song) state.history.push(state.song);
     loadAndPlay(state.queue.shift());
@@ -1631,7 +1631,7 @@ function returnHomeWithoutStopping() {
   window.clearTimeout(mobileReturnFallback);
   mobileReturnFallback = window.setTimeout(() => {
     mobileReturnFallback = 0;
-    // 2026-08-08 安可报「手机上一点返回就退出了,压根没在继续播放」。
+    // Mobile back-button fix: keep playback alive across navigation.
     // 原来这里是 location.assign('/')——把播放器这一页直接导航走,音乐必死。
     // 初衷是「别让她被困住」,但代价太大:手机 web 的音频只要文档一卸载就停,
     // 后台标签才活得下去。所以改成:主页已经在另一个标签开好了,这里只提示怎么切,
@@ -1668,10 +1668,10 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 
-/* ── 返回键接管(2026-08-08 安可点单)────────────────────────────────────────
+/* ── Back-button handling ──
    手机上播放器是 window.open 出来的新标签,**没有历史记录**。
    浏览器的规矩:没历史可退时按返回 = 关掉这个标签 = 文档卸载 = 音乐当场停。
-   安可的原话:「手机上一点返回就退出了,压根就没有在继续播放」。
+      On mobile, tapping back must not kill playback.
 
    做法:进页面先垫一格历史,把返回键接管过来——按返回不再关标签,而是走「回家」
    那条不杀音乐的路(切到主页标签,播放器留在后台继续唱)。每次接管后把格子垫回去,
@@ -1706,7 +1706,7 @@ function syncMediaSession() {
     try {
       navigator.mediaSession.metadata = new MediaMetadata({
         title: state.song.name || '一起听',
-        artist: state.song.artist || '兔牙家',
+        artist: state.song.artist || '♪',
         album: state.song.album || '',
         artwork
       });
@@ -1795,14 +1795,13 @@ function renderApp() {
 
   /* 抽屉里整条顶栏不生成（不是 display:none —— 干脆不渲染，省 52px 也省三个废按钮）。
      顺带 Home 那个 tab 也不给：个人主页、换背景图、签名都是「逛」的功能，
-     抽屉里她是来「听」的。安可 8-10：「在音乐的主页面才给看个人主页，信息什么的」。 */
+        Drawer mode hides the profile page: the drawer is for listening. */
   const topbarHTML = isEmbedded ? '' : `
     <div class="topbar">
-      <a class="topbar-btn" id="music-home-btn" href="/" target="tutooth-home" title="回到兔牙家" aria-label="回到兔牙家">
+      <a class="topbar-btn" id="music-home-btn" href="/" target="tutooth-home" title="回主页" aria-label="回主页">
         <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
       </a>
-      <!-- 8-31 名字四代史见 HOUSE.md;20:59 安可:「页头写二鱼开源会带上,撤了吧」——
-           牌子改中性的「一起听」(功能即名字,不带家梗);二鱼转入口头乳名保护区 -->
+      <!-- Header title. -->
       <div class="topbar-title">music</div>
       <button class="topbar-btn" id="music-mini-btn" type="button" title="缩成迷你播放器" aria-label="缩成迷你播放器">
         <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H3v5M16 21h5v-5M3 3l6 6M21 21l-6-6"/></svg>
@@ -2092,7 +2091,7 @@ let playlists = [];
 let plDetailSongs = [];
 let plCreating = false;
 
-let neteaseLists = [];   // 8-31 网易云歌单只读镜像(安可账号,cookie 就在家里)
+let neteaseLists = [];   // read-only mirror of the account's NetEase playlists
 
 async function renderPlaylists(container) {
   if (playlistDetail) {
@@ -2138,7 +2137,7 @@ async function renderPlaylists(container) {
     html += `<div class="empty-line">还没有歌单 — 点右上角 + 建一个</div>`;
   }
 
-  /* 8-31 安可:「既然都能用自己的账号了,能不能同步自己的歌单呢🥺」——
+  /* Account playlist mirror: the cookie account's own lists,
      网易云歌单只读镜像:她的账号她的单,点进去照常放,不改不删云端任何东西 */
   neteaseLists = (nd && nd.ok) ? (nd.playlists || []).map(p => ({ ...p, netease: true })) : [];
   if (neteaseLists.length) {
@@ -2158,7 +2157,7 @@ async function renderPlaylists(container) {
     });
   }
 
-  // 8-31 安可:「想把歌单放在最上面」——歌单区(本地+☁)在顶,最近在听/日推挪到底下
+  // Playlists section first; recent-played moves below.
   html += '</div>' + (isEmbedded ? buildRecentSection() : '') + '</div>';
   container.innerHTML = html;
 
@@ -2232,7 +2231,7 @@ async function renderPlaylistDetail(container) {
     : await api('/music/playlists/songs?id=' + encodeURIComponent(pl.id)).catch(() => ({}));
   plDetailSongs = d.ok ? (d.songs || []) : [];
 
-  /* 8-18 安可点单「参考图那种排版,玻璃做」:大头卡(封面+PLAYLIST眉题+歌单名+meta+圆形播放钮)
+  /* Hero card: cover + PLAYLIST eyebrow + name + meta + round play button
      + 列表加列头,像正经唱片行的目录页。返回键留在卡外一行,免得压住封面角。 */
   const heroCover = pl.cover || plDetailSongs[0]?.cover || '';
   let html = `<div class="pl-detail">
@@ -2360,7 +2359,7 @@ let searchTouched = false;
 let dailySongs = [];
 let dailySeed = '';
 let likedIds = new Set();
-/* 8-31 九针(安可:「歌单红心退出就没啦,网易云同步过来的喜欢列表全是空心」)——两个病根:
+/* Liked-song ledger: loaded at boot, merges local likes + the account's NetEase likes.
    ①红心账本只在逛 Discover 时才装载,开机不装=重进全空心;
    ②账本只记本地喜欢单,她网易云 5341 颗心从没入账,镜像歌单当然全空心。
    修:开机就装,本地+网易云红心全量合账;id 同时记 Number/String 两种形态(两边类型不齐)。 */
@@ -2380,13 +2379,13 @@ async function loadLikedIds() {
 async function renderDiscover(container) {
   container.innerHTML = '<div class="discover-tab"><div class="spinner"></div></div>';
 
-  // 8-31 安可:「Daily Picks 换成每日推荐的位置」——本地土法相似推荐退休,
+  // Daily section now shows the account's official NetEase daily recommendations,
   // 正牌 ☁ 网易日推搬进 Discover 常驻(唯一展示位,主页/歌单页的长列表已撤)
   const [plRes, dailyRes] = await Promise.all([
     api('/music/playlist').catch(() => ({})),
     api('/music/netease/daily').catch(() => ({}))
   ]);
-  if (plRes.ok) (plRes.songs || []).forEach(s => likedAdd(s.songId));   // 九针:并账,不再整本覆盖
+  if (plRes.ok) (plRes.songs || []).forEach(s => likedAdd(s.songId));   // merge, never overwrite
   if (dailyRes.ok) {
     dailySongs = (dailyRes.songs || []).map(s => ({
       name: s.name, artist: s.artist, album: s.album, cover: s.cover || '',
@@ -2409,7 +2408,7 @@ function buildDiscoverHTML() {
         <button class="search-go" id="search-go">Go</button>
       </div>
     </div>
-    <!-- 8-31 安可:「没搞懂roam有什么用,压根不看」——漫游药丸退休(引擎兜底留着,想复活翻git) -->
+    <!-- Roam pill retired (engine fallback kept in code). -->
     <div id="search-results"></div>`;
 
   // Daily picks (show when no search results)
@@ -2550,13 +2549,12 @@ function renderSearchResults() {
   });
 }
 
-// 收藏/取消收藏(2026-08-08 安可:「点进去发现不能收藏哥哥的歌」——
+// Like / unlike.
 // 以前只有 Discover 和搜索结果的列表里挂了心,正在放的这首反而收藏不了;
-// 小雾递来的歌是直接进播放器的,不经过那两个列表,于是就没处收。
 // 现在播放条和歌词页都挂了心,而且能取消:再点一下就从「喜欢」里拿出来。)
 async function likeSong(s) {
   if (!s?.songId) return;
-  /* 8-31 安可:「点红心能同步网易云吗！」——同步!写的是她自己的「喜欢的音乐」。
+  /* Hearts sync to the cookie account's own NetEase liked list.
      旁路异步走,本地红心不等网易;同步失败弹一句,不拦操作。 */
   const syncNe = (like) => {
     if (!/^\d+$/.test(String(s.songId))) return;
@@ -2594,7 +2592,7 @@ function heartSvg(on) {
 }
 
 // ── Play Song helper ──
-/* 8-31 八针(安可揪出的架构病:「一切歌单,哥哥点的东西就不见了;点第1首待播499、
+/* Queue architecture: a manual priority queue (never overwritten)
    点第10首变490;插入的歌应该是候选第一才对」)——她说得全对。病根:手动插的歌和
    「歌单剩余」共用一个 state.queue,后者每次整袋覆盖前者。
    分家:state.queue=优先队列(只装手动/远程插的歌,永远先播,谁也不许覆盖);
@@ -2628,7 +2626,7 @@ function playSong(s, rest) {
 // ── Now Playing Bar ──
 // ══════════════════════════════════════════
 
-/* 8-31 十针(安可:「抽屉里选歌有概率放不出去+蜜汁播放动画卡顿」)——验尸:
+/* np-bar renders on every audio tick; rebuilding DOM 4-5x/second swallowed taps
    renderNpBar 挂在 onAudioChange 上,timeupdate 每秒喂 4~5 次,整条播放条
    **每秒整块重建 HTML 四五遍**:按钮拆了装装了拆——她手指落下的瞬间按钮正好被换新,
    点击被吞=「放不出去」;持续重建=动画卡,chat 页 iframe 里双倍放大。
@@ -2728,7 +2726,7 @@ function renderLyricsView() {
         <button class="ly-mem-btn" id="ly-mv-btn" aria-label="看MV"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2.5"/><polygon points="10,9 16,12 10,15" fill="currentColor" stroke="none"/></svg></button>
         <button class="ly-mem-btn" id="ly-addlist-btn" aria-label="加入歌单"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h13M3 12h13M3 18h7"/><path d="M18 15v6M15 18h6"/></svg></button>      </div>` : ''}
     </div>
-    <!-- 8-18 安可拍板「转转转一般般」:黑胶唱片退休,换参考图式玻璃大头卡(方封面+NOW PLAYING 眉题)。
+    <!-- Glass hero card replaces the old spinning vinyl. -->
          syncDiscSpin 还在但查无此盘,自然空转;想复活唱片去 git 捞 8-10 的版本。 -->
     <div class="ly-cover-area">
       <div class="ly-card">
@@ -2743,7 +2741,7 @@ function renderLyricsView() {
     <div class="ly-lines" id="ly-lines-container">
       <div class="ly-loading">loading lyrics...</div>
     </div>
-    <!-- 8-31 偷师果果家(Cheiineeey/netease-music-mcp):播放器内直聊——
+    <!-- In-player line chat (flow inspired by Cheiineeey/netease-music-mcp):
          长按选句后这条小输入浮上来,想说的话就地写,寄出去不用离开歌词页 -->
     <div class="ly-chatline" id="ly-chatline" hidden>
       <div class="ly-chatline-quote" id="ly-chatline-quote"></div>
@@ -2753,7 +2751,7 @@ function renderLyricsView() {
         <button class="ly-chatline-close" id="ly-chatline-close" aria-label="收起">✕</button>
       </div>
     </div>
-    <!-- 8-18 二稿(安可:「没有我们家的味道,占地方好大」):两行并一行的胶囊甲板,
+    <!-- Compact one-row control deck. -->
          进度条滑块是兔兔本兔——歌走到哪它站到哪,拖歌等于拽兔子跑 -->
     <div class="ly-deck">
       <button class="ly-skip-btn" id="ly-prev"><svg viewBox="0 0 24 24" width="18" height="18"><path d="M6 6h2v12H6zm12 0v12l-8.5-6z" fill="currentColor"/></svg></button>
@@ -2842,7 +2840,7 @@ function updateSeekUI(ratio) {
   if (timeCur && state.duration) timeCur.textContent = fmt(ratio * state.duration);
 }
 
-/* 8-31 七针(安可:「切歌的时候太卡了」):换歌时两个 onSongChange 监听各拉一次歌词、
+/* Song-switch speedup: per-song lyric cache; duplicate onSongChange work removed.
    各画一遍整页列表=全部翻倍。加按歌缓存:同一首只请求+解析一次,重复调用只重画;
    连续切歌时旧请求作废(songId 校验),不会把上一首的词画到下一首头上。 */
 const lyricFetchCache = new Map();
@@ -2875,10 +2873,10 @@ async function loadLyrics() {
   renderLyricLines();
 }
 
-/* 8-31「文字PV」动效搬进歌词页(安可:「不如不要独立舞台,只把歌词动效搬过去」,
+/* Per-character lyric animation, applied in the lyrics list itself:
    概念借鉴 folia-major,代码是自家的):当前句逐字错峰点亮,唱过就恢复整句。 */
 function charSpans(text, base = 0) {
-  // 8-31 四针(安可:「每次开头都要卡一下」):字符 span 改成**装台时预拆**——
+  // Chars are split lazily on first activation and kept forever —
   // 旧版每次换句现场 innerHTML 重建+回流+一口气起 30 个动画,句头必卡。
   // 现在渲染歌词列表时就拆好,激活只翻 class,零重建。延迟写在 --d 变量里,
   // 只有 .active 时动画才引用它。词包字(.ly-w):英文单词不从中间拆行。
@@ -2919,7 +2917,7 @@ function renderLyricLines() {
   container.addEventListener('touchmove', pauseAutoScroll, { passive: true });
 
   // Click to seek;长按=选句分享(8-31)。
-  // 收尾针三连(安可:「取消长按复制之后,长按分享也不行了」):验尸——其实她手机上
+  // Long-press with a movement threshold: tiny finger jitter must not cancel the timer,
   // 我们的长按从来没赢过:任何 touchmove/mousemove 都直接取消计时,而手指按住必有微抖,
   // 550ms 永远数不满(之前被原生菜单盖着看不出来)。修:取消挂**位移阈值**,挪 >10px 才算想滑动。
   lyricsLineEls.forEach(el => {
@@ -3046,7 +3044,7 @@ function renderLyricsProgress() {
 
   // Update current lyric highlight
   if (lyricLines.length > 0) {
-    // 8-31 安可实测「大概 0.3s 延迟」:入场动画有显影时间,时钟提前 0.3s 点亮对冲——
+    // Slight lyric lead (0.3s) offsets the entrance animation's reveal time.
     // 唱到那句时字已经站定,卡拉OK的老规矩
     const LYRIC_LEAD = 0.3;
     let idx = -1;
@@ -3055,7 +3053,7 @@ function renderLyricsProgress() {
     }
     if (idx !== currentLyricIdx) {
       currentLyricIdx = idx;
-      // 文字PV动效:六针版(安可:「切歌的时候卡卡的」)——四针的整首预拆把 900 个 span
+      // Per-char split happens on first activation only (cheap), then class toggles.
       // 的装台成本压在了切歌瞬间。改**首次点亮才拆字,拆一次终身保留**:
       // 切歌=纯文本秒开,每句第一次轮到时拆 20 来个 span(便宜),之后永远只翻 class。
       lyricsLineEls.forEach((el, i) => {
@@ -3086,7 +3084,7 @@ function renderLyricsProgress() {
 // ── Song Memory Panel ──
 // ══════════════════════════════════════════
 
-/* 8-31 兔牙家 remake：批注改成手写的。
+/* Hand-written song notes:
    上游把面板锁在「先跑频谱分析」后面（librosa 没装，等于从出生就锁死），
    而且只读不写。现在：随时打开、直接写、点保存落进 music_memory.json。 */
 function openMemory(songId) {
@@ -3123,7 +3121,7 @@ function renderMemory(mv, mem, songId) {
     return (d.getMonth() + 1) + '/' + d.getDate();
   };
 
-  /* 8-31 六针(安可:「哥哥的备注我在批注页面看不到,批注页面就一个输入框」):
+  /* Read-then-write layout: existing notes displayed as text,
      旧版把已有批注塞在 textarea 里当可编辑文本——视觉上等于隐身。
      改成「先读后写」:已有批注/喜欢的句子/标签摆出来给人读,
      输入框永远是空的「再记一笔」,保存＝追加,历史永远在上面看得见。 */
@@ -3144,14 +3142,14 @@ function renderMemory(mv, mem, songId) {
     body += '<div class="sm-empty" style="padding:24px 0">这首还没有批注——写下第一笔吧</div>';
   }
   body += `<textarea class="sm-edit" id="sm-notes-edit" rows="3" placeholder="再记一笔——听到它的场景、想到的人、随便一句话。保存后会接在上面，不覆盖。"></textarea>`;
-  body += `<input class="sm-edit sm-edit-tags" id="sm-tags-edit" placeholder="标签（空格隔开，比如：深夜 兔牙家 单曲循环）" value="${esc((mem.tags || []).join(' '))}">`;
+  body += `<input class="sm-edit sm-edit-tags" id="sm-tags-edit" placeholder="标签（空格隔开）" value="${esc((mem.tags || []).join(' '))}">`;
   body += '<button class="sm-save" id="sm-save-btn">收进批注本</button>';
   body += '<div class="sm-meta">';
   if (mem.listenCount > 0) body += `<span>听过 ${mem.listenCount} 次</span>`;
   if (mem.togetherCount > 0) body += `<span>一起听完 ${mem.togetherCount} 次</span>`;
   if (mem.bpm) body += `<span>${mem.bpm} BPM</span>`;
   if (mem.firstListened) body += `<span>初遇 ${fmtDate(mem.firstListened)}</span>`;
-  if (mem.notedBy) body += `<span>上次批注：${mem.notedBy === 'fog' ? '小雾' : '安可'} ${fmtDate(mem.notedAt)}</span>`;
+  if (mem.notedBy) body += `<span>上次批注：${esc(mem.notedBy)} ${fmtDate(mem.notedAt)}</span>`;
   body += '</div>';
 
   mv.innerHTML = `
@@ -3174,7 +3172,7 @@ function renderMemory(mv, mem, songId) {
       await apiPost('/music/memory', {
         songId,
         action: 'note',
-        // 追加不覆盖:输入框只装新一笔,接在旧批注后面(六针,和小雾 -m 同一个哲学)
+        // Append, never overwrite: the input holds only the new entry.
         notes: [mem.notes || '', fresh].filter(Boolean).join('\n'),
         tags: document.getElementById('sm-tags-edit').value.split(/\s+/).filter(Boolean),
         name: state.song?.name || mem.name || '',
@@ -3190,7 +3188,7 @@ function renderMemory(mv, mem, songId) {
   });
 }
 
-/* ── 歌曲评论区（8-31 remake，安可点单「想在小手机里面刷歌曲评论」）──
+/* ── Song comments panel ──
    后端 /music/comments 走她自己的网易云 cookie；首页带热评，往下翻是最新。 */
 let commentsOpen = false;
 let cmtOffset = 0;
@@ -3266,13 +3264,13 @@ async function loadComments(songId, first) {
 onSongChange(() => {
   if (lyricsOpen) {
     renderLyricsView();
-    // loadLyrics 不在这儿叫了(七针):1688 行的全局 onSongChange 已经在拉,
+    // loadLyrics is intentionally NOT called here: the global onSongChange already loads,
     // 这里再叫一次=歌词双倍下载双倍整页重画,正是「切歌太卡」的另一半病根。
     // renderLyricsView 只搭壳,歌词列表由那边的 loadLyrics 灌进来。
   }
 });
 
-// ── 「接下来播」队列面板(8-31 安可:「没有排队等候的播放清单,看不到 rime 酱点的歌去了哪里」——
+// ── Up-next queue panel: manual/remote inserts, visible and editable ──
 //    state.queue 原来是个看不见的口袋,现在播放条挂「▤ N」小牌,点开能看能删能插队 ──
 function openQueue() {
   const qv = document.getElementById('queue-view');
@@ -3299,7 +3297,7 @@ function renderQueue() {
       <button class="sm-close" id="qv-close">&times;</button>
       <span class="sm-header-title">接下来播 · ${state.queue.length} 首</span>
     </div>
-    <div class="sm-body">${rows || '<div class="sm-empty">队列空空,点歌或让小雾 -P 一首</div>'}</div>`;
+        <div class="sm-body">${rows || '<div class="sm-empty">队列空空</div>'}</div>`;
   document.getElementById('qv-close').addEventListener('click', closeQueue);
   qv.querySelectorAll('[data-now]').forEach(btn => btn.addEventListener('click', () => {
     const i = Number(btn.dataset.now);
@@ -3313,7 +3311,7 @@ function renderQueue() {
   }));
 }
 
-// ── 加入歌单(8-31 晚,安可:「家里没有添加歌曲到xx列表的功能,红心之后全部列表都会有了」——
+// ── Add current song to a chosen playlist ──
 //    她都建好「rime推荐」空等着了。歌词页 ➕ 钮:当前这首→选一个本地歌单→收进去。 ──
 function openAddToList(song) {
   if (!song || !song.songId) return;
@@ -3357,7 +3355,7 @@ function closeAddToList() {
   if (av) { av.classList.add('hidden'); av.innerHTML = ''; }
 }
 
-// ── MV(8-31 晚,安可:「我们的音乐还没有接入mv功能呢！」)──
+// ── MV playback ──
 //    歌词页 🎬 钮 → /music/mv 查片源 → 全屏放;开MV时暂停音乐,关掉接着放。
 let mvWasPlaying = false;
 
@@ -3391,7 +3389,7 @@ async function openMv(song) {
     const t = v.currentTime;
     v.src = d.urls[qsel.value]; v.currentTime = t; v.play().catch(() => {});
   });
-  /* 8-31 深夜(安可:「MV能悬浮窗观看吗,想一边聊天一边看」)——浏览器原生画中画:
+  /* Native picture-in-picture: the video floats above everything;
      点「悬浮」→ 视频飘成系统级小窗(盖在聊天/别的App上),放映厅壳自动藏起但不杀视频;
      她关掉小窗时才真正收场(leavepictureinpicture → closeMv)。 */
   const vEl = document.getElementById('mv-video');
@@ -3427,9 +3425,9 @@ function closeMv() {
   if (mvWasPlaying) { mvWasPlaying = false; audio.play().catch(() => {}); }
 }
 
-// ── 远程点播接线(8-31 安可:「听说原来有哥哥直接插歌进列表的功能,怎么没有啦」——
+// ── Remote play: poll /music/remote every 5s for songs pushed by the companion ──
 //    /music/remote 后端一直在,客户端皮从没接过这条线。现在:5 秒一问,有歌就接。
-//    正在放歌 → 排进队列;闲着 → 直接开播。小雾那头用 `diange -P` 插歌。 ──
+//    Playing → enqueue; idle → play now.
 setInterval(async () => {
   try {
     const d = await api('/music/remote');
@@ -3440,11 +3438,11 @@ setInterval(async () => {
       if (!song.songId) continue;
       if (raw.mode === 'now' || !(state.song && (state.playing || state.queue.length))) {
         // diange --now 或播放器闲着:立刻开播
-        showToast(`小雾点了「${song.name}」,现在就放~`);
+                showToast(`点播的「${song.name}」来了,现在就放~`);
         loadAndPlay(song);
       } else {
         state.queue.push(song);
-        showToast(`小雾插了「${song.name}」进队列,点 ▤ 看`);
+                showToast(`「${song.name}」插进队列了,点 ▤ 看`);
       }
     }
     renderNpBar(); renderQueue();
@@ -3453,13 +3451,13 @@ setInterval(async () => {
 
 // ── Init ──
 setupMediaSession();
-loadLikedIds();   // 九针:红心账本开机就装(本地+网易云合账),不再等逛 Discover
+loadLikedIds();   // load the liked-song ledger at boot (local + NetEase account merged)
 init();
 </script>
 
-<!-- ══ 播放时冒小贴纸(2026-08-21 安可点单,参考 Design Spells #284「Queue」)══
+<!-- ══ Tiny stickers floating up from the play capsule (decorative) ══
      参考里的机制:小图标从播放键胶囊背后往上冒,浮一点点,淡出。一次一两个,不规律。
-     我们家换成安可画的水彩小件。纯加法:不动 .np-bar 一行,贴纸挂在 body 上用 fixed
+          Watercolor sprites, fixed-positioned on body; reads np-bar position per spawn.
      定位,每次生成时读一次 np-bar 的位置,所以 mini / embedded / 全屏三种活法都不用管。
      不要了:把这段 <style> 和 <script> 整块删掉即可。 ══ -->
 <style>

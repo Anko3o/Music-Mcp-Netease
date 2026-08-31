@@ -88,9 +88,9 @@ class EryuHandler(BaseHTTPRequestHandler):
     server_version = "Eryu/1.0"
 
     def log_message(self, fmt, *args):
-        # 本地改（2026-08-07 小雾，安可点单「我搜什么你都看得见，好丢脸」）：
+        # Local change (privacy): this is a single-user player; no need to audit searches.
         # 上游把整条请求行原样记进日志，搜索词、粘进来的分享链接全在里面躺着。
-        # 这是她一个人的播放器，不需要审计谁搜了什么。带查询串的路径一律只留路径，
+        # Paths with query strings are logged path-only.
         # 出错还是要看得见，所以状态码照记。
         line = fmt % args
         if "?" in line:
@@ -109,7 +109,7 @@ class EryuHandler(BaseHTTPRequestHandler):
         return json.loads(raw)
 
     def _check_auth(self) -> bool:
-        # 兔牙家部署：公网请求先经过同站 basic_auth，Caddy 再加固定的内部标记。
+        # Deployment note: public requests pass site-wide basic_auth first; the reverse proxy
         # 后端只监听 loopback；同时校验来源地址和标记，避免浏览器保存第二枚 Eryu token。
         if (
             self.client_address[0] in {"127.0.0.1", "::1"}
@@ -357,7 +357,7 @@ class EryuHandler(BaseHTTPRequestHandler):
             return
 
         # Static: cached music files.
-        # 本地改（2026-08-07 小雾）：上游这里是免鉴权的，注释说 song ID 猜不到——但网易云的
+        # Local change: upstream served this unauthenticated, claiming song IDs are unguessable —
         # song ID 是公开的，谁都能枚举，等于把缓存过的歌变成公开下载站。改成照常要 token；
         # <audio> 标签带不了自定义 header，所以前端走 ?token= 查询参数（_check_auth 本来就认）。
         if path.startswith("/music/file/"):
@@ -512,7 +512,7 @@ class EryuHandler(BaseHTTPRequestHandler):
 
     # ── Music endpoint handlers ───────────────────────────────────────────────
 
-    # 本地加（2026-08-07 小雾，安可点单）：搜索框里粘网易云分享链接就直接认出那首歌。
+    # Local addition: paste a NetEase share link into search and it resolves the song directly.
     # 上游只会拿整串链接当歌名去搜，铁定搜不到。分享链接常见三种长相：
     #   y.music.163.com/m/song?id=123&userid=...   （App 分享出来的）
     #   music.163.com/#/song?id=123                （网页版）
@@ -848,8 +848,8 @@ class EryuHandler(BaseHTTPRequestHandler):
         self._save_song_memory(mem)
         self._send_json(200, {"ok": True})
 
-    # ── 歌曲评论区（8-31 兔牙家 remake，安可点单「想在小手机里面刷歌曲评论」）──
-    #    走 .netease_cred 里她自己的账号 cookie，取网易云热评＋最新评论。
+    # ── Song comments ──
+    #    Uses the account cookie from .netease_cred to fetch hot + latest comments.
     #    首页(offset=0)带热评，翻页只给最新；字段裁剪到画卡要用的几项。
 
     def _handle_music_comments(self):
@@ -920,7 +920,7 @@ class EryuHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
-    # ── MV（8-31 晚，安可:「我们的音乐还没有接入mv功能呢！」）──
+    # ── MV playback ──
     #    songId → song/detail 拿 mv id → mv/detail 拿各清晰度片源。
     #    片源是网易 CDN 的 mp4，https 化后 <video> 直接吃。
 
@@ -959,8 +959,8 @@ class EryuHandler(BaseHTTPRequestHandler):
                               "duration": data.get("duration", 0),
                               "url": best, "urls": urls})
 
-    # ── 网易云歌单同步（8-31 晚，安可:「既然都能用自己的账号了，能不能同步自己的歌单呢🥺」）──
-    #    只读镜像:cookie 里就是她的账号,列歌单/取曲目,不改不删她云端的任何东西。
+    # ── Account playlist mirror ──
+    #    Read-only mirror of the cookie account's playlists; never modifies cloud data.
 
     def _handle_netease_playlists(self):
         try:
@@ -1012,7 +1012,7 @@ class EryuHandler(BaseHTTPRequestHandler):
         self._send_json(200, {"ok": True, "id": p.get("id"), "name": p.get("name", ""),
                               "total": p.get("trackCount", 0), "songs": songs})
 
-    # ── 网易云日推（8-31 晚，安可:「那岂不是可以直接把每日推荐也搬过来」）──
+    # ── Daily recommendations ──
 
     def _handle_netease_daily(self):
         try:
@@ -1032,9 +1032,9 @@ class EryuHandler(BaseHTTPRequestHandler):
             })
         self._send_json(200, {"ok": True, "songs": songs})
 
-    # ── 网易云红心同步（8-31 晚，安可:「点红心能同步网易云吗！」）──
+    # ── Two-way heart (like) sync ──
     #    读:song/like/get 全量红心 id。写:song/like 老口(实测 200;radio/like 会被
-    #    风控 -460,别换回去)。写进的是她自己的「喜欢的音乐」,她的账号她做主。
+    #    -460 risk-control; do not switch back). Writes to the cookie account's own liked list.
 
     def _handle_netease_likes_get(self):
         try:
@@ -1121,7 +1121,7 @@ class EryuHandler(BaseHTTPRequestHandler):
             if body.get("duration"):
                 entry["duration"] = body["duration"]
         elif action == "note":
-            # 8-31 兔牙家 remake：批注改成手写的。上游把 notes 锁在「先跑频谱分析」
+            # Hand-written notes: upstream locked notes behind spectrum analysis;
             # 后面（librosa 还没装，等于从出生就锁死）；现在人手直接写，不设门槛。
             for key in ("notes", "feeling", "tags", "favoriteLines"):
                 if key in body:
@@ -1372,7 +1372,7 @@ class EryuHandler(BaseHTTPRequestHandler):
 
     def _handle_music_remote_get(self):
         # 8-31 升级成小队列:上游是单曲文件、后到覆盖先到;现在攒成列表一次全交,
-        # 小雾连插几首也不丢。兼容旧单曲格式(dict 就包成 [dict])。
+        # Queue survives multiple rapid pushes. Backward compatible with the old single-song format.
         f = self.state.data_dir / "music_remote.json"
         if f.exists():
             data = json.loads(f.read_text())
