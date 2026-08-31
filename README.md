@@ -39,6 +39,14 @@
 
 ## 长什么样
 
+先看两张真机实拍（by 搬运工本人）：
+
+| 🪟 一边聊天一边看 MV —— 悬浮小窗浮在聊天页上，顶栏还挂着「一起听」进度药丸 | 📸 MV 放映厅 / 评论区 / 批注本 / 账号歌单镜像 · 四连 |
+|:--:|:--:|
+| <img src="screenshots/07-chat-pip.jpg" width="390" alt="边聊天边看MV"> | <img src="screenshots/08-tour.jpg" width="390" alt="功能四连"> |
+
+再来棚拍全家福：
+
 | ☁️ 网易云日推 · 带推荐理由 | 🎤 歌词页 · 逐字点亮 + 翻译 |
 |:--:|:--:|
 | <img src="screenshots/01-discover.png" width="390" alt="每日推荐"> | <img src="screenshots/03-lyrics.png" width="390" alt="歌词页"> |
