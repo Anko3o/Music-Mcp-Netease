@@ -1,8 +1,8 @@
 # music-mcp (netease)
 
-**A music player for two.** 一个为你与你的ai伴侣设计的自部署轻量版网易云播放器。
+**A music player for two.** 一个为你与你的 AI 伴侣设计的自部署轻量版网易云播放器。
 
-> 基于 [eryu（耳屿）](https://github.com/sebastianevan200-stack/eryu) © 2026 Evelyn & River建设。
+> 基于 [eryu（耳屿）](https://github.com/sebastianevan200-stack/eryu) © 2026 Evelyn & River 建设。
 >
 > 纯 Python 标准库 + 原生 JS，零依赖，只需要一条命令就能跑。
 
@@ -25,7 +25,7 @@
 - 📋 **播放列表** — 本地歌单管理，外加「接下来播」优先队列：对方手动插入的歌永远先播，防止被切歌单冲掉
 - 🔀 **随机播放** — 播放模式三档：顺序 / 单曲循环 / 随机
 - ✨ **歌词动效** — 文字PV 风逐字点亮（概念致敬 [folia-major](https://github.com/chthollyphile/folia-major)）
-- 🎬 **音乐 MV + 悬浮窗** — 1080P 可切清晰度，原生画中画：mv视频变成系统小窗，盖在聊天上，边聊天边看
+- 🎬 **音乐 MV + 悬浮窗** — 1080P 可切清晰度，原生画中画：MV 视频变成系统小窗，盖在聊天上，边聊天边看
 
 以及把「两个人」焊进每个角落的其它部分：
 
