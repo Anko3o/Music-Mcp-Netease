@@ -3381,6 +3381,7 @@ async function openMv(song) {
       <button class="sm-close" id="mv-close">&times;</button>
       <span class="mv-title">${esc(d.name || song.name)}<small>${esc(d.artist || song.artist || '')}</small></span>
       ${quals.length > 1 ? `<select class="mv-qual" id="mv-qual">${quals.map(q => `<option value="${q}">${q}P</option>`).join('')}</select>` : ''}
+      <button class="mv-qual" id="mv-pip" type="button">悬浮</button>
     </div>
     <video id="mv-video" src="${esc(d.url)}" controls autoplay playsinline referrerpolicy="no-referrer"></video>`;
   document.getElementById('mv-close').addEventListener('click', closeMv);
@@ -3390,16 +3391,40 @@ async function openMv(song) {
     const t = v.currentTime;
     v.src = d.urls[qsel.value]; v.currentTime = t; v.play().catch(() => {});
   });
+  /* 8-31 深夜(安可:「MV能悬浮窗观看吗,想一边聊天一边看」)——浏览器原生画中画:
+     点「悬浮」→ 视频飘成系统级小窗(盖在聊天/别的App上),放映厅壳自动藏起但不杀视频;
+     她关掉小窗时才真正收场(leavepictureinpicture → closeMv)。 */
+  const vEl = document.getElementById('mv-video');
+  const pipBtn = document.getElementById('mv-pip');
+  if (pipBtn && vEl) {
+    pipBtn.addEventListener('click', async () => {
+      if (!document.pictureInPictureEnabled || !vEl.requestPictureInPicture) {
+        showToast('这个浏览器不给开悬浮窗'); return;
+      }
+      try { await vEl.requestPictureInPicture(); }
+      catch { showToast('悬浮没开起来,再点一次试试'); }
+    });
+    vEl.addEventListener('enterpictureinpicture', () => {
+      const mv2 = document.getElementById('mv-view');
+      if (mv2) mv2.classList.add('hidden');   // 只藏壳,视频活着飘在外面
+      showToast('MV 飘出去了~关掉小窗就收场');
+    });
+    vEl.addEventListener('leavepictureinpicture', () => closeMv());
+  }
 }
 
 function closeMv() {
   const mv = document.getElementById('mv-view');
-  if (!mv || mv.classList.contains('hidden')) return;
+  if (!mv) return;
   const v = document.getElementById('mv-video');
-  if (v) { v.pause(); v.removeAttribute('src'); v.load(); }
+  if (!v && mv.classList.contains('hidden')) return;   // 早就收干净了
+  if (v) {
+    try { if (document.pictureInPictureElement === v) document.exitPictureInPicture(); } catch {}
+    v.pause(); v.removeAttribute('src'); v.load();
+  }
   mv.classList.add('hidden');
   mv.innerHTML = '';
-  if (mvWasPlaying) audio.play().catch(() => {});
+  if (mvWasPlaying) { mvWasPlaying = false; audio.play().catch(() => {}); }
 }
 
 // ── 远程点播接线(8-31 安可:「听说原来有哥哥直接插歌进列表的功能,怎么没有啦」——
