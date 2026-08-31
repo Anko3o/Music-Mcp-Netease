@@ -1,0 +1,7 @@
+server/data/
+server/.secret
+server/.netease_cred
+__pycache__/
+*.pyc
+.DS_Store
+node_modules/

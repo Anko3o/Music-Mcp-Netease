@@ -1,0 +1,3516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>music</title>
+<style>
+/* ── CSS Variables / Theme ── */
+:root {
+  /* 2026-08-07 安可点单:吸主页配色。
+     色卡与 reference/home-index.html 同根:
+     深玫瑰灰 #6b4a55 / 柔雾粉棕 #85616f / 玫瑰 #c2708a / 深玫瑰 #984e68 / 奶油黄 #ffedc2,
+     半透明奶白玻璃 + 1px 白边 + 柔粉阴影。Music 的主题落在「温柔唱片/音波」:
+     奶油纸面上漂浮唱针玫瑰,封面缺失时是奶油底玫瑰音符小方块。 */
+  --ink: #6b4a55;
+  --ink-soft: #85616f;
+  --muted: #ab8b98;
+  --faint: #cfb6c0;
+  --rose: #c2708a;
+  --rose-deep: #984e68;
+  --butter: #ffedc2;
+  --accent: #984e68;                        /* 文字强调:深玫瑰,浅底上对比够(文字继续用它,别拿去刷按钮) */
+  --accent-soft: #c2708a;                   /* 次级强调:玫瑰 */
+  --btn: #D26E88;                           /* 实心按钮统一色:抄 chat 的 --accent(「打开」那颗,8-18 安可
+                                               当场考试:「全站哪里用了播放键这个颜色」——答案是没有,
+                                               #984e68 当按钮是音乐页黑户,全站正牌是这个) */
+  --accent-tint: rgba(194, 112, 138, 0.14);
+  --good: #4d9b7b;
+  --bad: #d96a5e;
+  --bg: #fdf4f2;                            /* 平坦底色,供 color-mix 使用 */
+  --milk: rgba(255, 255, 255, 0.62);        /* 奶白玻璃卡 */
+  --milk-strong: rgba(255, 255, 255, 0.82);
+  --line: rgba(255, 255, 255, 0.9);         /* 玻璃卡 1px 白边 */
+  --hairline: rgba(194, 112, 138, 0.16);    /* 卡片之间的发丝线 */
+  --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Rounded", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-mono: "SF Mono", "Fira Code", "Cascadia Code", monospace;
+  --font-script: "Snell Roundhand", "Savoye LET", "Brush Script MT", cursive;
+  --shadow-soft: 0 12px 32px rgba(214, 120, 170, 0.16);
+  --shadow-sm: 0 4px 14px rgba(150, 90, 110, 0.10);
+  --r-s: 12px; --r-m: 20px; --r-full: 999px;
+  --blur: blur(18px) saturate(1.14);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+
+  /* ── 运动体系（2026-08-10 安可点单「借鉴 damso 的丝滑」）──
+     扒 damso.com 扒出来的配方：全站 19 处 expo.inOut、16 处 duration:1、Lenis lerp .12。
+     我们原来是清一色 0.18s + 浏览器默认 ease —— 每个动作「啪」一下就完事，
+     没有过程感，这才是「像小学生」的技术根因（不是粉色的错）。
+
+     铁律：只动 transform 和 opacity。这两个走合成器，不触发布局。
+     歌词行原本 transition 里带 font-size，每帧重排整列，移动端必卡 —— 已改 scale。
+
+     安可 8-10 定的施工序：先把交互做出来，时长最后一起扣。
+     所以时长全部收在这四个变量里，调一处全站跟着走。 */
+  --ease-out:    cubic-bezier(.16, 1, .3, 1);      /* ≈ expo.out：猛起步、极缓收尾，主力 */
+  --ease-in-out: cubic-bezier(.87, 0, .13, 1);     /* ≈ expo.inOut：转场用，两头都稳 */
+  --ease-spring: cubic-bezier(.22, 1.12, .44, 1);  /* 轻微过冲，按压回弹用 */
+  --ease-press:  cubic-bezier(.4, 0, .2, 1);       /* 按下去要跟手，这条不能慢 */
+
+  --t-press: .12s;   /* 按下：必须即时 */
+  --t-fast:  .3s;    /* 小元件：药丸、图标、勾选 */
+  --t-base:  .55s;   /* 主力：入场、卡片、封面 */
+  --t-slow:  .9s;    /* 大转场：页面切换、唱片起转 */
+  --stagger: 42ms;   /* 列表逐行错开的间隔 */
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --t-press: 0s; --t-fast: 0s; --t-base: 0s; --t-slow: 0s; --stagger: 0ms; }
+}
+
+/* ── Reset ── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body {
+  height: 100%; width: 100%;
+  height: 100dvh;
+  font-family: var(--font-ui);
+  color: var(--ink);
+  overflow: hidden;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+  /* 8-18 安可红笔两连:「像小学生」的是背景(三 radial 彩虹渐变),换水彩纸又被「不要贴鸭」
+     ——最终按参考图一号来:一块干净的素粉,什么都不贴什么都不叠。
+     玻璃卡的层次交给卡自己的白边和粉影,不靠背景花活。 */
+  background: #fbeff4;
+}
+button { font-family: inherit; cursor: pointer; }
+input { font-family: inherit; }
+img { display: block; }
+button:focus-visible, input:focus-visible, [tabindex]:focus-visible {
+  outline: 2px solid rgba(152, 78, 104, 0.55);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+/* ── App Shell ── */
+#app {
+  width: 100%; height: 100%; height: 100dvh;
+  display: flex; flex-direction: column;
+  overflow: hidden; position: relative;
+}
+/* 桌面独立窗别无限拉开:内容收窄成舞台,两侧留给家的背景。 */
+@media (min-width: 560px) {
+  #app {
+    max-width: 460px; margin: 0 auto;
+    border-inline: 1px solid rgba(255, 255, 255, 0.75);
+    box-shadow: 0 0 60px rgba(214, 120, 170, 0.14);
+  }
+  .lyrics-view, .memory-view { max-width: 460px; margin-inline: auto; }
+}
+.app-bg {
+  position: absolute; inset: 0;
+  background-size: cover; background-position: center;
+  opacity: 0.28; pointer-events: none; z-index: 0;
+}
+#app > *:not(.app-bg):not(.lyrics-view):not(.memory-view):not(.mv-view) { position: relative; z-index: 1; }
+
+/* ── Top Bar ── */
+.topbar {
+  min-height: 52px; padding: 4px 12px 4px 12px;
+  display: flex; align-items: center; gap: 6px; flex-shrink: 0;
+  backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
+  background: rgba(255, 250, 252, 0.55);
+  border-bottom: 1px solid var(--hairline);
+  padding-top: env(safe-area-inset-top, 0px);
+}
+.topbar-title {
+  flex: 1; font-family: var(--font-script);
+  font-size: 24px; font-weight: 500; color: var(--rose-deep);
+  text-align: center; letter-spacing: 0.5px; line-height: 1.2;
+}
+.topbar-btn {
+  width: 36px; height: 36px; flex-shrink: 0;
+  background: var(--milk); border: 1px solid var(--line); border-radius: var(--r-full);
+  color: var(--rose-deep); text-decoration: none;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: var(--shadow-sm);
+  transition: transform var(--t-base) var(--ease-spring), box-shadow var(--t-base) var(--ease-out);
+}
+.topbar-btn:active { transform: scale(0.9); }
+
+/* ── Body (tab content) ── */
+.tab-body {
+  flex: 1; overflow-y: auto; overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+.tab-body::-webkit-scrollbar, .ly-lines::-webkit-scrollbar, .sm-body::-webkit-scrollbar { width: 6px; }
+.tab-body::-webkit-scrollbar-thumb,
+.ly-lines::-webkit-scrollbar-thumb,
+.sm-body::-webkit-scrollbar-thumb {
+  background: rgba(194, 112, 138, 0.35); border-radius: 999px;
+}
+
+/* ── Bottom Nav ──
+   主页 dock 的姊妹件:奶油玻璃长条,圆角收紧,选中项深玫瑰。 */
+.bottom-nav {
+  display: flex; justify-content: space-around; align-items: center;
+  margin: 6px 10px calc(var(--safe-bottom) + 10px);
+  padding: 6px 8px;
+  border: 1px solid var(--line); border-radius: var(--r-full);
+  background: rgba(255, 250, 252, 0.72);
+  backdrop-filter: blur(22px) saturate(1.15); -webkit-backdrop-filter: blur(22px) saturate(1.15);
+  box-shadow: 0 14px 34px rgba(194, 112, 138, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  flex-shrink: 0;
+}
+.nav-item {
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  background: none; border: none; color: var(--muted);
+  font-size: 10px; letter-spacing: 0.4px; padding: 7px 18px;
+  border-radius: var(--r-full);
+  transition: color var(--t-fast) var(--ease-out), background var(--t-fast) var(--ease-out), transform var(--t-base) var(--ease-spring);
+}
+.nav-item:active { transform: translateY(1px); }
+.nav-item.active { color: var(--rose-deep); background: rgba(194, 112, 138, 0.12); }
+.nav-item.active span { font-weight: 600; }
+.nav-item svg {
+  fill: none; stroke: currentColor; stroke-width: 1.5;
+  transition: stroke-width var(--t-fast) var(--ease-out);
+}
+/* 原本选中态是 fill: currentColor —— 房子图标填实还认得出，
+   但音符和放大镜一填就是一坨黑块（8-10 实拍抓到）。
+   改成加粗描边：图标始终是同一个图标，只是「重」了一点。 */
+.nav-item.active svg { fill: none; stroke-width: 2.1; }
+
+/* ── 通用奶白玻璃卡 / 空状态 ── */
+.card {
+  background: var(--milk); border: 1px solid var(--line); border-radius: var(--r-m);
+  backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
+  box-shadow: var(--shadow-soft);
+}
+/* .empty-card（虚线框 + 大 emoji + 两行教学文案）8-10 已整体退役，
+   改用样式表末尾的 .empty-line：一行轻声的字，说完就让位。 */
+
+/* ── 封面:缺失时的奶油音符占位 ── */
+.coverbx {
+  position: relative; overflow: hidden; flex-shrink: 0;
+  display: grid; place-items: center;
+  background: linear-gradient(150deg, rgba(194, 112, 138, 0.2), rgba(255, 237, 194, 0.62));
+  color: rgba(152, 78, 104, 0.6);
+}
+.coverbx::before {
+  content: "♪"; font-size: 1em; line-height: 1;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+.coverbx::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(155deg, rgba(255, 255, 255, 0.22), transparent 45%);
+}
+.coverbx img {
+  position: absolute; inset: 0; z-index: 1;
+  width: 100%; height: 100%; object-fit: cover;
+}
+.coverbx img.gone { display: none; }
+
+/* ── Now Playing (mini) Bar ── */
+.np-bar {
+  height: 58px; flex-shrink: 0; margin: 6px 12px 2px;
+  background: var(--milk-strong);
+  backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
+  border: 1px solid var(--line); border-radius: 18px;
+  box-shadow: var(--shadow-sm);
+  display: flex; align-items: center; gap: 10px; padding: 0 8px 0 7px;
+  cursor: pointer; position: relative; overflow: hidden;
+}
+.np-bar.hidden { display: none; }
+.np-cover { width: 44px; height: 44px; border-radius: 12px; font-size: 16px; }
+.np-info { flex: 1; min-width: 0; overflow: hidden; }
+.np-name { font-size: 13px; font-weight: 600; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.np-artist { font-size: 11px; color: var(--ink-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+.np-btn {
+  width: 38px; height: 38px; border-radius: var(--r-full); flex-shrink: 0;
+  background: var(--btn); border: none; color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 4px 12px rgba(152, 78, 104, 0.35);
+  transition: transform var(--t-base) var(--ease-spring);
+}
+.np-btn:active { transform: scale(0.9); }
+.np-next-btn {
+  background: none; border: none; color: var(--accent-soft); padding: 8px; flex-shrink: 0;
+  border-radius: var(--r-full);
+}
+.np-next-btn:active { transform: scale(0.9); }
+.np-progress {
+  position: absolute; top: 0; left: 0; height: 2px; border-radius: 999px;
+  background: var(--btn);
+  transition: width 0.3s linear;
+}
+
+/* The player lives in its own named window. Mini mode turns that window itself
+   into the global floating player; no page or iframe is nested inside another.
+   迷你窗目标尺寸 360×150:整窗就是一块玫瑰奶糖。 */
+body.window-mini .topbar,
+body.window-mini .tab-body,
+body.window-mini .bottom-nav,
+body.window-mini .lyrics-view,
+body.window-mini .memory-view { display: none !important; }
+body.window-mini #app { min-height: 112px; }
+body.window-mini .np-bar {
+  display: flex !important;
+  flex: 1 1 auto; height: 100dvh; min-height: 112px;
+  gap: 14px; padding: 14px 16px; margin: 0;
+  border: 0; border-radius: 0; overflow: hidden;
+  background:
+    radial-gradient(circle at 85% 20%, rgba(255, 237, 194, 0.6), transparent 46%),
+    linear-gradient(135deg, rgba(194, 112, 138, 0.2), rgba(255, 251, 246, 0.9) 70%);
+}
+body.window-mini .np-cover {
+  width: 66px; height: 66px; border-radius: var(--r-full);
+  font-size: 22px;
+  box-shadow: 0 6px 18px rgba(150, 90, 110, 0.25), inset 0 0 0 2px rgba(255, 255, 255, 0.8);
+}
+/* 迷你窗里封面做成小唱片:中心一枚奶油唱孔 */
+body.window-mini .np-cover::after {
+  content: ""; position: absolute; inset: 0; z-index: 2;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle, rgba(255, 251, 246, 0.95) 0 3px, rgba(214, 120, 170, 0.25) 3px 6px, transparent 6px),
+    repeating-radial-gradient(circle, transparent 0 9px, rgba(255, 255, 255, 0.16) 9px 10px);
+}
+body.window-mini .np-name { font-size: 14px; }
+body.window-mini .np-artist { margin-top: 3px; font-size: 11px; }
+body.window-mini .np-btn { width: 44px; height: 44px; }
+body.window-mini .np-btn svg { width: 24px; height: 24px; }
+body.window-mini .np-progress { top: auto; bottom: 0; height: 3px; }
+
+/* ── 抽屉形态（聊天页「一起听」的 iframe）──
+   顶栏在 JS 里就没渲染，这里管的是「剩下的东西怎么在 561px 里活得好」。
+   原则同上：不是等比缩小，是砍掉「逛」的功能、把高度还给「听」。 */
+body.embedded #app { max-width: none; border-inline: 0; box-shadow: none; }
+body.embedded .app-bg { display: none; }          /* 抽屉里背景图只会让字更难读 */
+
+/* 导航从「图标上、文字下」的两行大方块，改成一行横排小药丸：62px → 44px。 */
+body.embedded .bottom-nav {
+  margin: 4px 10px calc(var(--safe-bottom) + 6px);
+  padding: 4px 6px;
+}
+body.embedded .nav-item {
+  flex-direction: row; gap: 6px; padding: 7px 14px; font-size: 11.5px;
+}
+body.embedded .nav-item svg { width: 16px; height: 16px; }
+body.embedded .np-bar { height: 52px; margin: 4px 10px 0; }
+body.embedded .np-cover { width: 40px; height: 40px; }
+/* 抽屉矮，歌词页的留白按比例收，不然一屏只剩两三行歌词 */
+body.embedded .ly-lines { padding: clamp(28px, 12dvh, 80px) 22px clamp(36px, 15dvh, 96px); }
+body.embedded .ly-cover-area { padding: 2px 18px 12px; }
+body.embedded .ly-controls { padding: 6px 20px calc(var(--safe-bottom) + 10px); }
+
+/* ── 入场编排（damso 的 stagger）──
+   原来列表是整块「啪」地出现。现在逐行错开 --stagger，最多排到第 14 行，
+   再往后一起进 —— 不然长歌单最后一行要等两秒才露面。
+   只动 transform / opacity，不碰布局。 */
+@keyframes stagger-in {
+  from { opacity: 0; transform: translate3d(0, 14px, 0); }
+  to   { opacity: 1; transform: none; }
+}
+.stagger-in {
+  animation: stagger-in var(--t-base) var(--ease-out) backwards;
+  animation-delay: calc(min(var(--i, 0), 14) * var(--stagger));
+}
+
+/* ── Tab 药丸滑动跟随 ──
+   原来选中态是直接换 background，硬切。现在药丸本体是一个独立元素，
+   在 nav 里滑过去；JS 只负责量位置写 --x/--w，动画交给 CSS。 */
+.bottom-nav { position: relative; }
+.nav-ink {
+  position: absolute; left: 0; top: 50%; z-index: 0;
+  height: calc(100% - 12px); width: var(--w, 0px);
+  transform: translate3d(var(--x, 0px), -50%, 0);
+  background: rgba(194, 112, 138, 0.12);
+  border-radius: var(--r-full);
+  transition: transform var(--t-base) var(--ease-out),
+              width var(--t-base) var(--ease-out);
+  pointer-events: none;
+}
+.nav-ink.silent { transition: none; }   /* 首帧定位别从左上角滑过来 */
+.nav-item { position: relative; z-index: 1; }
+/* 药丸已经由 .nav-ink 画了，选中项自己就别再铺一层背景 */
+.nav-item.active { background: none; }
+
+/* Tab 切换：整页轻轻淡入，行内的错落交给 .stagger-in，两层叠出层次。 */
+@keyframes tab-enter { from { opacity: 0; } to { opacity: 1; } }
+.tab-body.tab-enter { animation: tab-enter var(--t-fast) var(--ease-out); }
+
+/* ── 拆卡片：空状态从「虚线框 + 大图标 + 两行说明」改成一行轻声细语 ──
+   那个虚线框是「小学生感」最重的一处：一整屏就为了说「还没听过歌」，
+   还要配个大音符和一句教学文案。damso 的空位就是空着。 */
+.empty-line {
+  padding: 18px 0; color: var(--muted); font-size: 12.5px;
+  letter-spacing: .02em;
+}
+/* 歌单/搜索结果里的空状态不在 .section 里，得自己补上左右边距 */
+.pls-list > .empty-line, .song-list > .empty-line { padding-inline: 16px; }
+
+/* ── Home Tab ── */
+.home-tab { padding: 10px 0 18px; }
+.home-card {
+  margin: 4px 14px 4px;
+  background: var(--milk); border: 1px solid var(--line); border-radius: 22px;
+  backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
+  box-shadow: var(--shadow-soft);
+  overflow: hidden;
+}
+.home-hero {
+  position: relative; height: 150px;
+  background:
+    radial-gradient(circle at 82% 30%, rgba(255, 237, 194, 0.7), transparent 52%),
+    repeating-radial-gradient(circle at 118% -10%, rgba(194, 112, 138, 0.22) 0 2px, transparent 2px 26px),
+    linear-gradient(130deg, rgba(194, 112, 138, 0.3), rgba(255, 219, 208, 0.4) 55%, rgba(255, 237, 194, 0.45));
+  background-size: cover; background-position: center;
+  cursor: pointer;
+}
+.home-hero .hero-hint {
+  position: absolute; inset: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 6px;
+  color: rgba(152, 78, 104, 0.75); font-size: 11px; letter-spacing: 0.1em;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+.home-hero .hero-note { font-size: 26px; opacity: 0.7; }
+.home-profile {
+  position: relative; display: flex; flex-direction: column; align-items: center;
+  padding: 0 20px 22px;
+}
+.home-avatar {
+  width: 78px; height: 78px; border-radius: 50%; overflow: hidden; cursor: pointer;
+  border: 3px solid rgba(255, 255, 255, 0.95);
+  background: linear-gradient(150deg, rgba(194, 112, 138, 0.2), rgba(255, 237, 194, 0.65));
+  display: flex; align-items: center; justify-content: center;
+  margin-top: -39px; position: relative; z-index: 1;
+  box-shadow: 0 8px 22px rgba(214, 120, 170, 0.28);
+}
+.home-avatar span { font-size: 26px; color: var(--rose-deep); opacity: 0.7; font-weight: 300; }
+.home-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.home-name {
+  margin-top: 9px; font-size: 17px; font-weight: 700; color: var(--ink);
+  letter-spacing: 0.6px; cursor: pointer;
+  padding: 2px 10px; border-radius: var(--r-full);
+  transition: background var(--t-fast) var(--ease-out);
+}
+@media (hover: hover) { .home-name:hover { background: rgba(194, 112, 138, 0.1); } }
+.home-sig {
+  margin-top: 4px; font-size: 12.5px; color: var(--ink-soft);
+  cursor: pointer; text-align: center; max-width: 80%; line-height: 1.6;
+  border-bottom: 1px dashed rgba(194, 112, 138, 0.4);
+  padding-bottom: 2px;
+}
+.home-edit-wrap { display: flex; gap: 6px; margin-top: 8px; width: 80%; align-items: center; }
+.home-edit-input {
+  flex: 1; min-width: 0; border: 1px solid var(--hairline); border-radius: var(--r-full);
+  background: rgba(255, 255, 255, 0.75);
+  font-size: 13px; color: var(--ink); outline: none; text-align: center; padding: 8px 14px;
+}
+.home-edit-input:focus { border-color: var(--accent-soft); }
+.home-edit-ok {
+  background: var(--btn); border: none; color: #fff; border-radius: var(--r-full);
+  padding: 8px 16px; font-size: 12px; flex-shrink: 0;
+  box-shadow: 0 4px 12px rgba(152, 78, 104, 0.3);
+}
+
+/* ── Section ── */
+.section { padding: 16px 16px 0; }
+/* 0.18em 的字距是给全大写英文用的；中文标题被它撑成「最近 在听」，
+   一眼就散（8-10 实拍抓到）。中文收到近乎 0，英文标题另开一档。 */
+.section-hd {
+  font-size: 11.5px; font-weight: 600; color: var(--accent);
+  margin-bottom: 10px; letter-spacing: 0.02em;
+  display: flex; align-items: center; gap: 8px;
+}
+.section-hd.en { letter-spacing: 0.18em; }
+/* 那条横线撤了 —— 拆卡片同理：分区靠间距分，不靠画线分。 */
+
+/* ── Recent List ── */
+.recent-list { display: flex; flex-direction: column; gap: 6px; }
+.recent-row {
+  display: flex; align-items: center; gap: 12px; padding: 8px 10px;
+  cursor: pointer; border-radius: 14px;
+  background: rgba(255, 255, 255, 0.55); border: 1px solid rgba(255, 255, 255, 0.8);
+  transition: transform var(--t-base) var(--ease-spring), background var(--t-fast) var(--ease-out), border-color var(--t-fast) var(--ease-out);
+}
+@media (hover: hover) {
+  .recent-row:hover { background: rgba(255, 255, 255, 0.82); border-color: var(--line); }
+}
+.recent-row:active { transform: scale(0.985); background: var(--milk-strong); }
+.recent-row-cover { width: 46px; height: 46px; border-radius: 11px; font-size: 16px; }
+.recent-row-info { flex: 1; min-width: 0; }
+.recent-row-name { font-size: 13.5px; font-weight: 600; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.recent-row-artist { font-size: 11.5px; color: var(--ink-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+
+/* ── Playlists Tab ── */
+.pls-tab { padding: 12px 16px 18px; }
+.pls-hd { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.pls-title { font-size: 11.5px; font-weight: 600; color: var(--accent); letter-spacing: 0.18em; }
+.pls-add {
+  width: 34px; height: 34px; border-radius: var(--r-full); border: 1px solid var(--line);
+  background: var(--milk); color: var(--accent); font-size: 19px; line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: var(--shadow-sm);
+  transition: transform var(--t-base) var(--ease-spring);
+}
+.pls-add:active { transform: scale(0.9); }
+.pls-create { display: flex; gap: 8px; margin-bottom: 12px; align-items: center; }
+.pls-create-input {
+  flex: 1; min-width: 0; border: 1px solid var(--hairline); border-radius: var(--r-full);
+  background: rgba(255, 255, 255, 0.75);
+  font-size: 13px; color: var(--ink); outline: none; padding: 9px 16px;
+}
+.pls-create-input:focus { border-color: var(--accent-soft); }
+.pls-create-ok {
+  background: var(--btn); border: none; color: #fff; border-radius: var(--r-full);
+  padding: 9px 16px; font-size: 12px; flex-shrink: 0;
+}
+.pls-create-cancel {
+  background: none; border: none; color: var(--muted); padding: 8px; border-radius: var(--r-full);
+}
+.pls-list { display: flex; flex-direction: column; gap: 8px; }
+.pls-row {
+  display: flex; align-items: center; gap: 12px; padding: 10px 12px;
+  cursor: pointer; border-radius: 16px;
+  background: var(--milk); border: 1px solid var(--line);
+  box-shadow: var(--shadow-sm);
+  transition: transform var(--t-base) var(--ease-spring), background var(--t-fast) var(--ease-out);
+}
+@media (hover: hover) { .pls-row:hover { background: var(--milk-strong); } }
+.pls-row:active { transform: scale(0.98); }
+.pls-row-cover {
+  width: 52px; height: 52px; border-radius: 13px; flex-shrink: 0;
+  background: linear-gradient(150deg, rgba(194, 112, 138, 0.2), rgba(255, 237, 194, 0.6));
+  background-size: cover; background-position: center;
+  display: flex; align-items: center; justify-content: center;
+  color: rgba(152, 78, 104, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+}
+.pls-row-info { flex: 1; min-width: 0; }
+.pls-row-name {
+  font-size: 14.5px; font-weight: 600; color: var(--ink);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.pls-row-count { font-size: 11.5px; color: var(--ink-soft); margin-top: 3px; }
+.pls-row-del {
+  background: none; border: none; color: var(--faint); flex-shrink: 0; padding: 10px;
+  border-radius: var(--r-full); transition: color var(--t-fast) var(--ease-out);
+}
+.pls-row-del:active { color: var(--bad); transform: scale(0.92); }
+
+/* ── Playlist Detail ── */
+.pl-detail { padding: 8px 16px 18px; }
+.pl-detail-hd { display: flex; align-items: center; gap: 8px; padding: 6px 0; }
+.pl-detail-title { font-size: 17px; font-weight: 700; color: var(--ink); flex: 1; min-width: 0; }
+.pl-detail-meta { font-size: 11.5px; color: var(--ink-soft); margin-bottom: 12px; letter-spacing: 0.06em; }
+.pl-rename { display: flex; gap: 6px; flex: 1; align-items: center; }
+.pl-rename-input {
+  flex: 1; min-width: 0; border: 1px solid var(--hairline); border-radius: var(--r-full);
+  background: rgba(255, 255, 255, 0.75);
+  font-size: 14px; color: var(--ink); outline: none; padding: 8px 14px;
+}
+.pl-rename-ok {
+  background: var(--btn); border: none; color: #fff; border-radius: var(--r-full);
+  padding: 8px 14px; font-size: 12px; flex-shrink: 0;
+}
+.play-all {
+  display: inline-flex; align-items: center; gap: 7px; padding: 9px 22px;
+  border-radius: var(--r-full); background: var(--btn); color: #fff; border: none;
+  font-size: 12.5px; font-weight: 600; margin-bottom: 12px;
+  box-shadow: 0 6px 16px rgba(152, 78, 104, 0.32);
+  transition: transform var(--t-base) var(--ease-spring);
+}
+.play-all:active { transform: scale(0.95); }
+.back-btn {
+  background: none; border: none; color: var(--rose-deep); padding: 8px;
+  border-radius: var(--r-full); display: flex; align-items: center;
+}
+
+/* ── Song List ──
+   小奶白大盘子,行与行之间只有发丝线;正在播的那一行是玫瑰糖水。 */
+.song-list {
+  display: flex; flex-direction: column;
+  background: var(--milk); border: 1px solid var(--line); border-radius: var(--r-m);
+  backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
+  box-shadow: var(--shadow-soft);
+  overflow: hidden;
+}
+.song-row {
+  display: flex; align-items: center; gap: 10px; padding: 9px 12px;
+  border-bottom: 1px solid rgba(194, 112, 138, 0.1);
+  transition: background var(--t-fast) var(--ease-out);
+}
+.song-row:last-child { border-bottom: 0; }
+@media (hover: hover) { .song-row:hover { background: rgba(255, 255, 255, 0.5); } }
+.song-row.active {
+  background: linear-gradient(90deg, rgba(194, 112, 138, 0.16), rgba(194, 112, 138, 0.05));
+  box-shadow: inset 3px 0 0 var(--accent-soft);
+}
+.song-idx {
+  width: 20px; font-size: 11px; color: var(--faint);
+  text-align: center; flex-shrink: 0; font-family: var(--font-mono);
+}
+.song-row.active .song-idx { color: var(--accent); opacity: 1; font-weight: 700; }
+.song-cover { width: 40px; height: 40px; border-radius: 10px; cursor: pointer; font-size: 15px; }
+.song-info { flex: 1; min-width: 0; cursor: pointer; }
+.song-name { font-size: 13.5px; font-weight: 500; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.song-row.active .song-name { color: var(--accent); font-weight: 700; }
+.song-artist { font-size: 11px; color: var(--ink-soft); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.song-rm { background: none; border: none; color: var(--faint); flex-shrink: 0; padding: 10px 4px; }
+.song-rm:active { color: var(--bad); transform: scale(0.92); }
+
+/* ── 歌单详情 · 大头卡(8-18 安可点单「参考图那种排版,玻璃风格」)──
+   一张大玻璃卡:封面 + PLAYLIST 眉题 + 歌单名 + 「♡ N songs」+ 圆形播放钮;
+   列表顶上加一行列头(# TITLE ♡),唱片行目录页的做派。 */
+.pl-hero {
+  position: relative; display: flex; align-items: center; gap: 16px;
+  padding: 18px; margin: 2px 0 14px;
+  background: var(--milk); border: 1px solid var(--line); border-radius: var(--r-m);
+  backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
+  box-shadow: var(--shadow-soft);
+}
+.pl-hero-cover {
+  width: 96px; height: 96px; border-radius: 16px; flex-shrink: 0; font-size: 34px;
+  border: 1px solid var(--line); box-shadow: var(--shadow-sm);
+}
+.pl-hero-info { flex: 1; min-width: 0; }
+.pl-hero-eyebrow {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.3em;
+  color: var(--accent-soft); margin-bottom: 4px;
+}
+.pl-hero .pl-detail-title {
+  font-size: 21px; font-weight: 800; line-height: 1.2;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.pl-hero-meta { font-size: 11.5px; color: var(--ink-soft); margin-top: 5px; letter-spacing: 0.05em; }
+.pl-play-fab {
+  width: 46px; height: 46px; border-radius: var(--r-full); border: none; flex-shrink: 0;
+  background: var(--btn); color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 6px 16px rgba(152, 78, 104, 0.32);
+  transition: transform var(--t-base) var(--ease-spring);
+  align-self: flex-end;
+}
+.pl-play-fab svg { margin-left: 2px; }
+.pl-play-fab:active { transform: scale(0.92); }
+.song-cols {
+  display: flex; align-items: center; gap: 10px; padding: 10px 12px 8px;
+  border-bottom: 1px solid var(--hairline);
+  font-size: 10px; font-weight: 700; letter-spacing: 0.22em; color: var(--faint);
+}
+.song-cols-idx { width: 20px; text-align: center; letter-spacing: 0; }
+.song-cols-title { flex: 1; }
+.song-cols-like { width: 34px; text-align: center; letter-spacing: 0; }
+/* 抽屉里空间小,大头卡缩一号(按场景裁,不等比缩) */
+body.embedded .pl-hero { gap: 12px; padding: 13px 14px; }
+body.embedded .pl-hero-cover { width: 68px; height: 68px; border-radius: 12px; font-size: 24px; }
+body.embedded .pl-hero .pl-detail-title { font-size: 17px; }
+body.embedded .pl-play-fab { width: 40px; height: 40px; }
+/* 底栏眉题:参考图那句手写体 Now playing… */
+.np-eyebrow {
+  font-family: var(--font-script); font-size: 11.5px; color: var(--accent-soft);
+  line-height: 1; margin-bottom: 2px; white-space: nowrap;
+}
+body.window-mini .np-eyebrow { display: none; }
+.like-btn {
+  background: none; border: none; color: var(--faint);
+  cursor: pointer; flex-shrink: 0; padding: 8px;
+  border-radius: var(--r-full);
+  transition: color var(--t-fast) var(--ease-out), transform var(--t-base) var(--ease-spring);
+}
+.like-btn.liked { color: var(--accent-soft); }
+.like-btn:active { transform: scale(0.85); }
+.queue-btn {
+  background: none; border: none; color: var(--faint);
+  cursor: pointer; flex-shrink: 0; padding: 8px;
+  border-radius: var(--r-full);
+  transition: color var(--t-fast) var(--ease-out), transform var(--t-base) var(--ease-spring);
+}
+.queue-btn:active { color: var(--accent); transform: scale(0.85); }
+.search-clear.hidden { display: none; }
+
+/* ── Discover Tab ── */
+.discover-tab { padding-bottom: 18px; }
+.discover-top { padding: 12px 16px 0; }
+.discover-title {
+  font-size: 11.5px; font-weight: 600; color: var(--accent); letter-spacing: 0.18em;
+  margin-bottom: 10px;
+  display: flex; align-items: center; gap: 8px;
+}
+.discover-title::after { content: ""; flex: 1; height: 1px; background: var(--hairline); }
+.search-bar {
+  display: flex; align-items: center; gap: 8px; padding: 5px 6px 5px 15px;
+  background: var(--milk-strong); border: 1px solid var(--line);
+  border-radius: var(--r-full); color: var(--ink-soft);
+  box-shadow: var(--shadow-sm);
+}
+.search-bar:focus-within { border-color: var(--accent-soft); }
+.search-input {
+  flex: 1; border: none; background: transparent; font-size: 13.5px; color: var(--ink);
+  outline: none; min-width: 0; padding: 6px 0;
+}
+.search-input::placeholder { color: var(--muted); }
+.search-clear { background: none; border: none; color: var(--muted); padding: 8px; border-radius: var(--r-full); display: flex; }
+.search-go {
+  background: var(--btn); border: none; color: #fff; border-radius: var(--r-full);
+  padding: 8px 18px; font-size: 12.5px; font-weight: 600; flex-shrink: 0;
+  transition: transform var(--t-base) var(--ease-spring);
+}
+.search-go:active { transform: scale(0.94); }
+.roam-pill {
+  display: inline-flex; align-items: center; gap: 6px; margin: 10px 16px 0;
+  padding: 7px 15px; border-radius: var(--r-full); font-size: 11.5px; cursor: pointer;
+  background: rgba(255, 255, 255, 0.5); border: 1px solid var(--hairline);
+  color: var(--ink-soft);
+  transition: color var(--t-fast) var(--ease-out), background var(--t-fast) var(--ease-out),
+              border-color var(--t-fast) var(--ease-out), transform var(--t-base) var(--ease-spring);
+}
+.roam-pill.active {
+  color: #fff; background: var(--btn); border-color: transparent;
+  box-shadow: 0 4px 12px rgba(152, 78, 104, 0.3);
+}
+
+/* ── Lyrics View (fullscreen) ──
+   布局三件套别动:position:fixed / flex min-height:0 / 手动滚动。这里只换皮肤。 */
+.lyrics-view {
+  position: fixed; inset: 0; z-index: 100;
+  width: 100%; height: 100%; height: 100dvh;
+  min-height: 0; overflow: hidden; overscroll-behavior: none;
+  display: flex; flex-direction: column;
+  background: var(--bg);
+  background-image: linear-gradient(
+    color-mix(in srgb, var(--bg) 85%, transparent),
+    color-mix(in srgb, var(--bg) 90%, transparent));
+  transition: transform var(--t-slow) var(--ease-in-out);
+}
+.lyrics-view.hidden { transform: translateY(100%); pointer-events: none; }
+.ly-header {
+  padding: 12px 16px; display: flex; align-items: center; justify-content: space-between;
+  padding-top: calc(env(safe-area-inset-top, 0px) + 12px);
+  flex-shrink: 0;
+}
+.ly-close {
+  background: var(--milk); border: 1px solid var(--line); color: var(--rose-deep);
+  font-size: 18px; cursor: pointer; padding: 0;
+  width: 36px; height: 36px; border-radius: var(--r-full);
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: var(--shadow-sm);
+}
+.ly-mem-btn {
+  background: var(--milk); border: 1px solid var(--line); color: var(--rose-deep);
+  cursor: pointer; padding: 0;
+  width: 36px; height: 36px; border-radius: var(--r-full);
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: var(--shadow-sm);
+  transition: transform var(--t-base) var(--ease-spring);
+}
+.ly-mem-btn:active { transform: scale(0.9); }
+/* 歌词页右上角工具排:从两颗长到五颗(♥✎💬🎬➕),8-31 收尾针二连:
+   安可:「左三(评论区)飞出去了」——全排缩号收腰,谁也不许再越狱 */
+.ly-head-tools { display: flex; align-items: center; gap: 5px; flex-wrap: nowrap; min-width: 0; }
+.ly-head-tools .ly-mem-btn { width: 32px; height: 32px; flex: 0 0 auto; }
+.ly-head-tools .ly-mem-btn svg { width: 15px; height: 15px; }
+.ly-like-btn.liked, .np-like-btn.liked { color: var(--accent); }
+.np-like-btn {
+  background: none; border: none; color: var(--accent-soft);
+  padding: 8px; flex-shrink: 0; border-radius: var(--r-full);
+  display: flex; align-items: center; justify-content: center;
+  transition: color var(--t-fast) var(--ease-out), transform var(--t-base) var(--ease-spring);
+}
+.np-like-btn:active { transform: scale(0.85); }
+.ly-cover-area { display: flex; align-items: center; gap: 14px; padding: 2px 20px 16px; flex-shrink: 0; }
+
+/* ── 唱片（2026-08-10 安可点单，她排的第一位）──
+   原来是 58px 圆角小方块，静止不动，看不出这是个「在放歌」的地方。
+   现在是一张会转的唱片：封面裁成圆、中心一个孔、外圈一道压印。
+
+   停转不能是急停。CSS 的 animation-play-state:paused 就是急停 ——
+   真唱机断电后盘还会靠惯性再飘一段。所以暂停走 spinDown()：
+   读下当前角度、脱离 animation、再用 ease-out 多转 22° 停下。
+   起转同理，从当前角度接着转，不回弹到 0。 */
+.ly-disc-wrap { flex-shrink: 0; padding: 3px; }
+.ly-disc {
+  position: relative; width: 62px; height: 62px; border-radius: 50%;
+  box-shadow: 0 8px 22px rgba(150, 90, 110, 0.26),
+              inset 0 0 0 1px rgba(255, 255, 255, 0.55);
+  /* 唱片压纹：一圈极淡的同心线，转起来才看得出在动 */
+  background:
+    repeating-radial-gradient(circle at 50% 50%,
+      rgba(107, 74, 85, 0.09) 0 1px, transparent 1px 4px),
+    var(--rose-deep);
+  will-change: transform;
+}
+.ly-disc .ly-cover {
+  width: 100%; height: 100%; border-radius: 50%; font-size: 18px;
+  /* 封面稍微内缩，露出一圈黑胶边 */
+  transform: scale(.82); box-shadow: none;
+}
+.ly-disc-hole {
+  position: absolute; left: 50%; top: 50%; width: 13px; height: 13px;
+  transform: translate(-50%, -50%); border-radius: 50%;
+  background: var(--bg);
+  box-shadow: inset 0 0 0 1px rgba(107, 74, 85, 0.22),
+              0 0 0 3px rgba(255, 255, 255, 0.5);
+}
+@keyframes disc-spin {
+  from { transform: rotate(var(--spin-from, 0deg)); }
+  to   { transform: rotate(calc(var(--spin-from, 0deg) + 360deg)); }
+}
+.ly-disc.spinning { animation: disc-spin 9s linear infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .ly-disc.spinning { animation: none; }
+}
+/* ── 歌词页大头卡 + 底部甲板(8-18 安可点单:参考图排版,玻璃;唱片她判「转转转一般般」退休)── */
+.ly-card {
+  flex: 1; min-width: 0; display: flex; align-items: center; gap: 14px;
+  padding: 14px 16px;
+  background: var(--milk); border: 1px solid var(--line); border-radius: var(--r-m);
+  backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
+  box-shadow: var(--shadow-soft);
+}
+.ly-cover-sq {
+  width: 72px; height: 72px; border-radius: 14px; flex-shrink: 0; font-size: 24px;
+  border: 1px solid var(--line); box-shadow: var(--shadow-sm);
+}
+.ly-eyebrow {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.3em;
+  color: var(--accent-soft); margin-bottom: 3px;
+}
+/* 二稿:一行胶囊(chat 输入条的语汇——奶白胶囊+玫瑰实心钮),高度砍一半 */
+.ly-deck {
+  flex-shrink: 0; margin: 0 14px calc(var(--safe-bottom) + 12px);
+  display: flex; align-items: center; gap: 2px;
+  background: var(--milk); border: 1px solid var(--line); border-radius: var(--r-full);
+  backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
+  box-shadow: var(--shadow-soft);
+  padding: 7px 14px 7px 8px;
+}
+.ly-deck .ly-play-btn { width: 34px; height: 34px; box-shadow: 0 4px 12px rgba(210, 110, 136, 0.35); }
+.ly-deck .ly-skip-btn { padding: 8px 5px; }
+.ly-deck .ly-seek { margin-left: 6px; }
+.ly-time-combo {
+  flex-shrink: 0; margin-left: 8px; font-family: var(--font-mono);
+  font-size: 10px; color: var(--muted); white-space: nowrap;
+}
+.ly-time-combo i { font-style: normal; margin: 0 2px; opacity: .6; }
+/* 兔头滑块二稿(安可:「实心兔头!水彩兔色系对不上」):内联 SVG 剪影,
+   颜色吃 --btn,和播放钮/进度线一个血——纯矢量,没有贴图色差问题 */
+.ly-deck .ly-seek-thumb {
+  width: 22px; height: 22px; border: none; border-radius: 0;
+  background: none; box-shadow: none;
+  color: var(--btn);
+  display: flex; align-items: center; justify-content: center;
+  transform: translate(-50%, -56%);
+}
+.ly-song-info { min-width: 0; flex: 1; }
+.ly-song-name {
+  font-size: 16.5px; font-weight: 700; color: var(--ink);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.ly-song-artist { font-size: 12.5px; color: var(--ink-soft); margin-top: 3px; }
+.ly-lines {
+  position: relative;
+  flex: 1 1 0; min-height: 0; overflow-y: auto; overflow-x: hidden;
+  padding: clamp(56px, 18dvh, 150px) 24px clamp(72px, 22dvh, 180px);
+  -webkit-mask-image: linear-gradient(transparent, black 20%, black 80%, transparent);
+  mask-image: linear-gradient(transparent, black 20%, black 80%, transparent);
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+  touch-action: pan-y;
+  /* scroll-behavior:smooth 已撤 —— 自动跟随改走 glideLyricsTo() 的 lerp 惯性，
+     两套一起开会打架（原生平滑会吃掉我们每帧写的 scrollTop）。 */
+  scroll-padding-block: 42%;
+}
+.ly-loading, .ly-no-lyrics {
+  text-align: center; color: var(--muted); padding: 40px 0; font-size: 13px;
+}
+/* 这里原本是：transition: … font-size .3s …  —— 卡顿的真凶。
+   font-size 动画每帧都要重新排版整列歌词（还会连锁触发换行变化），
+   移动端一路掉帧。damso 那种丝滑的底层规矩就一条：只动 transform 和 opacity，
+   这两个走合成器，不碰布局。所以字号固定，大小差交给 scale。
+   字重也不再跳（600↔500 会改变文字宽度 → 长句重新换行 → 整列抖），
+   层次改由 opacity + 颜色 + 缩放三样一起给。 */
+/* 8-10 安可加点：「私心其实想要歌词居中」。
+   居中后 transform-origin 必须跟着改成 center —— 还留 left center 的话，
+   放大时整行会往右甩，看着像在抖。 */
+.ly-line {
+  padding: 7px 0; font-size: 15px; font-weight: 500;
+  color: var(--ink); opacity: 0.3;
+  text-align: center;
+  transform: scale(0.92); transform-origin: center;
+  transition: opacity var(--t-base) var(--ease-out),
+              transform var(--t-base) var(--ease-out),
+              color var(--t-base) var(--ease-out);
+  cursor: pointer; line-height: 1.5;
+}
+.ly-line.active {
+  opacity: 1; color: var(--accent);
+  transform: scale(1.1);            /* ≈ 16.5px 的视觉，但没有一次重排 */
+}
+/* 居中版不要左侧那根标尺了（贴在左边缘会和居中的字脱节）。
+   当下那句靠字号、颜色、亮度自己站出来就够 —— Apple Music 也是这么干的。 */
+.ly-trans {
+  font-size: 12px; opacity: 0.65; margin-top: 2px; font-weight: 400; color: var(--ink-soft);
+}
+.ly-line.active .ly-trans { opacity: 0.85; color: var(--accent-soft); }
+/* ── 8-31 文字PV动效＋封面糊底(安可:「背景做成封面模糊很多倍不就好了嘛」)──
+   封面放大重糊铺满歌词页,叠一层奶纱保字色——跟聊天页壁纸同一条家规。 */
+/* 8-31 收尾针(安可:「长按分享总弹出谷歌的长按选中复制」):歌词行免疫原生选中,长按完整归选句分享 */
+.ly-line { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+.ly-w { display: inline-block; white-space: pre; }   /* 词包字:英文单词不从中间拆行 */
+.ly-ch { display: inline-block; white-space: pre; }  /* 平时就是普通字,激活才有戏 */
+.ly-line.active .ly-ch {
+  opacity: 0; animation: lyChar .34s cubic-bezier(.2,.8,.2,1) var(--d, 0ms) forwards;
+}
+@keyframes lyChar {
+  /* 8-31 提速二针:不透明度在前 45% 拉满(字先看清),位移把余下动作演完。
+     三针(安可:「优化之后动画卡起来了」):per-char 的 filter:blur 动画要逐帧重画,
+     翻译行加入后 30+ 个字同跑直接压垮手机——拆掉 blur,只动 transform 和 opacity,
+     这本来就是家里的动效家规(plus-drawer.css 白纸黑字),犯规的还是立规的人,丢脸存档 */
+  0%   { opacity: 0; transform: translateY(.4em) rotate(3deg); }
+  45%  { opacity: 1; }
+  100% { opacity: 1; transform: none; }
+}
+/* ── 8-31 「接下来播」队列:播放条小牌 + 清单面板 ── */
+.np-queue-btn {
+  flex: 0 0 auto; border: 1px solid var(--line); border-radius: 999px;
+  padding: 4px 10px; margin-right: 2px;
+  background: var(--accent-tint); color: var(--accent);
+  font: inherit; font-size: 11.5px; font-weight: 700; cursor: pointer;
+}
+.qv-item { display: flex; align-items: center; gap: 10px; padding: 10px 2px; border-bottom: 1px solid rgba(194,112,138,.12); }
+.qv-cover { width: 42px; height: 42px; border-radius: 10px; flex: 0 0 auto; overflow: hidden; }
+.qv-cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.qv-info { flex: 1; min-width: 0; display: grid; }
+.qv-info b { font-size: 13.5px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.qv-info small { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.qv-now {
+  flex: 0 0 auto; border: 0; border-radius: 999px; padding: 6px 12px;
+  background: var(--accent-tint); color: var(--accent);
+  font: inherit; font-size: 12px; font-weight: 600; cursor: pointer;
+}
+.qv-del {
+  flex: 0 0 auto; width: 26px; height: 26px; border: 0; border-radius: 50%;
+  background: transparent; color: var(--muted); font-size: 13px; cursor: pointer;
+}
+/* ── 8-31 播放器内直聊小条(偷师果果家) ── */
+.ly-chatline {
+  position: sticky; bottom: 0; z-index: 5;
+  margin: 8px 12px; padding: 10px 12px;
+  background: var(--milk, rgba(255,250,253,.96)); border: 1px solid var(--line, #f1c3d7);
+  border-radius: 16px; box-shadow: 0 8px 24px rgba(150, 86, 120, .16);
+}
+.ly-chatline[hidden] { display: none; }
+.ly-chatline-quote {
+  font-size: 12px; color: var(--accent, #c2708a); font-style: italic;
+  margin-bottom: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.ly-chatline-row { display: flex; gap: 8px; align-items: center; }
+.ly-chatline-input {
+  flex: 1; min-width: 0; padding: 8px 12px; font: inherit; font-size: 13px;
+  border: 1px solid var(--line, #f1c3d7); border-radius: 999px;
+  background: #fff; color: var(--ink, #6b4a5c); outline: none;
+}
+.ly-chatline-send {
+  flex: 0 0 auto; padding: 8px 14px; border: 0; border-radius: 999px;
+  background: var(--accent, #c2708a); color: #fff6ee;
+  font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer;
+}
+.ly-chatline-close {
+  flex: 0 0 auto; width: 28px; height: 28px; border: 0; border-radius: 50%;
+  background: transparent; color: var(--muted, #9b7d8c); cursor: pointer;
+}
+.daily-reason {
+  font-size: 9.5px; padding: 1px 6px; margin-left: 4px;
+  border-radius: 999px; background: var(--accent-tint); color: var(--accent);
+  vertical-align: 1px;
+}
+/* ── 8-31 晚 MV 放映厅 ── */
+.mv-view {
+  position: fixed; inset: 0; z-index: 140;
+  background: #0b0910;
+  display: flex; flex-direction: column;
+}
+.mv-view.hidden { display: none; }
+.mv-top {
+  display: flex; align-items: center; gap: 10px;
+  padding: 14px 16px; padding-top: calc(env(safe-area-inset-top, 0px) + 14px);
+  color: #f5edf7;
+}
+.mv-title { flex: 1; font-size: 14px; font-weight: 600; display: grid; }
+.mv-title small { font-size: 11px; font-weight: 400; opacity: .7; }
+.mv-qual {
+  background: rgba(255,255,255,.1); color: #f5edf7;
+  border: 1px solid rgba(255,255,255,.2); border-radius: 999px;
+  padding: 4px 10px; font: inherit; font-size: 12px;
+}
+#mv-video { flex: 1; width: 100%; min-height: 0; object-fit: contain; background: #000; }
+.ly-bottom { display: flex; align-items: center; gap: 8px; padding: 8px 20px; flex-shrink: 0; }
+.ly-time { font-size: 10px; color: var(--muted); flex-shrink: 0; width: 32px; font-family: var(--font-mono); }
+.ly-time-end { text-align: right; }
+.ly-seek {
+  flex: 1; height: 22px; cursor: pointer; position: relative; touch-action: none;
+  display: flex; align-items: center;
+}
+.ly-seek-track {
+  width: 100%; height: 4px;
+  background: rgba(194, 112, 138, 0.18);
+  border-radius: 999px; position: relative;
+}
+.ly-seek-fill {
+  height: 100%; border-radius: 999px;
+  background: var(--btn);
+  transition: width 0.15s linear;
+}
+.ly-seek-thumb {
+  position: absolute; top: 50%; width: 13px; height: 13px;
+  background: #fff; border: 3px solid var(--accent); border-radius: 50%;
+  transform: translate(-50%, -50%); pointer-events: none;
+  box-shadow: 0 2px 8px rgba(152, 78, 104, 0.3);
+}
+.ly-controls {
+  display: flex; align-items: center; justify-content: center; gap: 30px;
+  padding: 8px 20px calc(var(--safe-bottom) + 16px); color: var(--accent);
+  flex-shrink: 0;
+}
+.ly-play-btn {
+  width: 54px; height: 54px; border-radius: 50%;
+  background: var(--btn); color: #fff;
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+  border: none;
+  box-shadow: 0 8px 22px rgba(152, 78, 104, 0.4);
+  transition: transform var(--t-base) var(--ease-spring);
+}
+.ly-play-btn:active { transform: scale(0.92); }
+.ly-skip-btn {
+  background: none; border: none; color: var(--accent-soft);
+  cursor: pointer; padding: 10px; border-radius: var(--r-full);
+  transition: transform var(--t-base) var(--ease-spring);
+}
+.ly-skip-btn:active { transform: scale(0.9); }
+
+@media (prefers-reduced-motion: reduce) {
+  .lyrics-view, .ly-line, .ly-seek-fill { transition: none; }
+  .ly-lines { scroll-behavior: auto; }
+}
+
+/* ── Song Memory Panel ── */
+.memory-view {
+  position: fixed; inset: 0; z-index: 110;
+  display: flex; flex-direction: column;
+  background: linear-gradient(168deg, #fff1f5 0%, #fff8ec 55%, #ffeff2 100%);
+}
+.memory-view.hidden { display: none; }
+.sm-header {
+  display: flex; align-items: center; gap: 10px; padding: 16px 20px;
+  padding-top: calc(env(safe-area-inset-top, 0px) + 16px);
+}
+.sm-close {
+  background: var(--milk); border: 1px solid var(--line); color: var(--rose-deep);
+  font-size: 20px; cursor: pointer; padding: 0;
+  width: 36px; height: 36px; border-radius: var(--r-full);
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: var(--shadow-sm);
+}
+.sm-header-title { font-size: 15px; font-weight: 600; color: var(--ink); flex: 1; }
+.sm-refresh {
+  background: var(--milk); border: 1px solid var(--line); color: var(--rose-deep);
+  cursor: pointer; padding: 0; width: 36px; height: 36px; border-radius: var(--r-full);
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: var(--shadow-sm);
+}
+.sm-body { flex: 1; overflow-y: auto; padding: 0 20px 24px; }
+.sm-feeling {
+  font-size: 14px; line-height: 1.7; color: var(--ink);
+  padding: 16px 18px; margin-bottom: 12px;
+  background: linear-gradient(150deg, rgba(255, 237, 194, 0.7), rgba(255, 248, 230, 0.5));
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  border-radius: 16px; border-left: 3px solid var(--accent-soft);
+  box-shadow: var(--shadow-sm);
+}
+.sm-notes {
+  font-size: 13.5px; line-height: 1.7; color: var(--ink);
+  padding: 12px 14px; white-space: pre-wrap;
+  /* 8-31 六针:批注是拿来读的,给它一张纸卡,别再躲在输入框里 */
+  background: rgba(255, 255, 255, .55); border: 1px solid var(--line);
+  border-radius: 14px; margin-bottom: 10px;
+}
+.sm-fav-title { font-size: 11.5px; color: var(--muted); padding: 6px 2px 2px; }
+.sm-fav-lines { padding: 8px 0 12px; }
+.sm-fav-line {
+  font-size: 13px; color: var(--accent);
+  padding: 6px 0 6px 12px;
+  border-left: 2px solid rgba(194, 112, 138, 0.5);
+  line-height: 1.5; font-style: italic;
+}
+.sm-meta {
+  display: flex; flex-wrap: wrap; gap: 12px; padding: 12px 2px;
+  font-size: 11px; color: var(--muted);
+}
+.sm-tags { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 0; }
+.sm-tag {
+  font-size: 11.5px; padding: 4px 12px; border-radius: var(--r-full);
+  background: var(--accent-tint); color: var(--accent);
+}
+.sm-loading, .sm-empty {
+  text-align: center; color: var(--muted); padding: 60px 0; font-size: 13px;
+}
+/* ── 8-31 兔牙家 remake：批注手写件 ＋ 评论区 ── */
+.sm-edit {
+  width: 100%; box-sizing: border-box; margin: 10px 0 0;
+  padding: 12px 14px; font: inherit; font-size: 13.5px; line-height: 1.7; color: var(--ink);
+  background: var(--milk); border: 1px solid var(--line); border-radius: 14px;
+  resize: vertical; outline: none;
+}
+.sm-edit:focus { border-color: var(--accent-soft); }
+.sm-edit-tags { resize: none; }
+.sm-save {
+  display: block; margin: 12px auto 4px; padding: 9px 26px;
+  font: inherit; font-size: 13px; font-weight: 600; color: #fff6ee;
+  background: var(--accent); border: 0; border-radius: var(--r-full); cursor: pointer;
+  box-shadow: var(--shadow-sm);
+}
+.sm-save:disabled { opacity: .6; }
+.cm-item {
+  padding: 12px 2px 10px; border-bottom: 1px solid rgba(194, 112, 138, 0.12);
+}
+.cm-item.hot { background: linear-gradient(150deg, rgba(255,237,194,.28), transparent); border-radius: 12px; padding-inline: 10px; margin-bottom: 4px; border-bottom: 0; }
+.cm-head { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
+.cm-ava { width: 24px; height: 24px; border-radius: 50%; object-fit: cover; }
+.cm-user { font-size: 12px; font-weight: 600; color: var(--rose-deep); }
+.cm-hot-tag { font-size: 10px; padding: 1px 8px; border-radius: var(--r-full); background: var(--accent-tint); color: var(--accent); }
+.cm-text { font-size: 13.5px; line-height: 1.7; color: var(--ink); white-space: pre-wrap; overflow-wrap: break-word; }
+.cm-foot { display: flex; gap: 14px; margin-top: 6px; font-size: 11px; color: var(--muted); }
+.cm-divider { text-align: center; font-size: 11.5px; color: var(--muted); padding: 16px 0 6px; }
+.cm-more { margin-bottom: 20px; }
+
+
+/* ── Toast ── */
+.toast {
+  position: fixed; top: 56px; left: 50%; transform: translateX(-50%);
+  background: rgba(107, 74, 85, 0.95); color: #fff6ee; padding: 9px 20px; border-radius: 999px;
+  font-size: 13px; font-weight: 600; z-index: 9000; pointer-events: none;
+  box-shadow: 0 10px 26px rgba(107, 74, 85, 0.35); animation: fadeUp var(--t-fast) var(--ease-out);
+  opacity: 0; transition: opacity var(--t-fast) var(--ease-out);
+}
+.toast.show { opacity: 1; }
+
+/* ── 「切标签就好」提示条(2026-08-08)：原来这里是直接把播放器导航走，音乐必死。
+   现在改成给她选择：默认留在后台继续唱，真要跳走得她自己按。 ── */
+.stuck-hint {
+  position: fixed; left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom));
+  z-index: 9100; display: flex; flex-direction: column; gap: 8px;
+  background: rgba(107, 74, 85, 0.96); color: #fff6ee;
+  padding: 13px 15px; border-radius: 16px; font-size: 13px; line-height: 1.6;
+  box-shadow: 0 14px 34px rgba(60, 34, 44, 0.42);
+  animation: fadeUp var(--t-fast) var(--ease-out);
+}
+.stuck-hint button {
+  appearance: none; border: 1px solid rgba(255, 246, 238, 0.34); border-radius: 999px;
+  background: transparent; color: #fff6ee; font: inherit; font-size: 12.5px;
+  padding: 7px 12px; cursor: pointer;
+}
+.stuck-hint button[data-act="stay"] { background: rgba(255, 246, 238, 0.16); border-color: transparent; }
+.stuck-hint button:active { transform: scale(.97); }
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateX(-50%) translateY(8px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.spinner {
+  width: 22px; height: 22px; border: 2.5px solid rgba(194, 112, 138, 0.2);
+  border-top-color: var(--accent-soft); border-radius: 50%;
+  animation: spin 0.6s linear infinite; margin: 34px auto;
+}
+/* ── 按压手感：按下去要跟手，松开要慢慢弹回来 ──
+   这是「高级」和「廉价」的分界线。原来按下和松开共用一条 0.18s：
+   按下慢半拍（像卡了），松开又太快（像弹簧断了）。
+   现在两段分开 —— :active 期间用极短的 --t-press 立刻缩到位，
+   手一松，规则失效，回弹走各自本来的 --t-base + --ease-spring（带一点过冲）。
+   放在样式表最后，靠 :active 的特指度盖住前面各家自己的 transition。 */
+button:active,
+.nav-item:active,
+.recent-row:active,
+.song-row:active,
+.pls-row:active,
+.roam-pill:active {
+  transition-duration: var(--t-press) !important;
+  transition-timing-function: var(--ease-press) !important;
+}
+
+/* 列表行原本按下去毫无反应（只有按钮有）。加一层极轻的下沉，
+   幅度必须小 —— 整行缩放太明显会晕。 */
+.recent-row, .song-row, .pls-row {
+  transition: transform var(--t-base) var(--ease-spring),
+              background var(--t-fast) var(--ease-out);
+}
+.recent-row:active, .song-row:active, .pls-row:active { transform: scale(0.978); }
+
+/* ── 拆卡片 ──
+   安可 8-10：「太像小学生」。诊断下来最重的一条不是配色，是「万物皆卡片」：
+   每个元素都要一个白边 + 阴影 + 圆角的框装起来，框里再套框。
+   实拍数到三层套娃：.song-list 一张大玻璃卡，里面每个 .pls-row / .recent-row
+   又各是一张带边框和阴影的小卡 —— 一屏里能数出十几个「框」。
+   damso 的做法是内容直接落在底上，靠间距、字号、留白分层，一个框都不画。
+
+   下面把常驻的底色/描边/阴影全卸掉，只在手指真的碰到时才给一点回应。 */
+/* 8-18 修订:安可点单玻璃排版(参考图是一张大玻璃盘装整个列表),
+   .song-list 从卸妆名单里请回去——大盘子回归,行仍是无框平铺在盘内,
+   「一张盘 + 平铺行」正是参考图的层级,不是 8-10 拆掉的那种三层套娃。 */
+.home-card,
+.recent-row,
+.pls-row {
+  background: none !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+/* 卸了底色，行与行就得靠间距分开，不然糊成一坨 */
+.recent-list { gap: 2px; }
+.pls-list { gap: 4px; }
+
+/* 摸上去 / 按下去才浮出底色 —— 静止时干净，交互时有回应 */
+@media (hover: hover) {
+  .recent-row:hover, .pls-row:hover, .song-row:hover {
+    background: rgba(255, 255, 255, 0.55) !important;
+  }
+}
+.recent-row:active, .pls-row:active, .song-row:active {
+  background: rgba(255, 255, 255, 0.66) !important;
+}
+
+/* 删除键别常驻瞪着人：平时半透明，碰到那一行才亮起来 */
+.pls-row-del, .song-rm {
+  opacity: 0.28;
+  transition: opacity var(--t-fast) var(--ease-out);
+}
+@media (hover: hover) {
+  .pls-row:hover .pls-row-del, .song-row:hover .song-rm { opacity: 0.75; }
+}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="toast" class="toast"></div>
+
+<script>
+/* ═══════════════════════════════════════════
+   eryu — standalone vanilla JS music player
+   ═══════════════════════════════════════════ */
+
+// 版本号供主页识别已经打开的旧播放器；避免 named window 永远复用旧 JS。
+window.TUTOOTH_MUSIC_VERSION = '2026-08-10.1';
+
+/* 播放器有三种活法，样式与功能各走各的：
+     独立窗   —— /music/ 直接打开，完整形态
+     迷你窗   —— body.window-mini，整窗缩成一块玫瑰奶糖（8-08 已有）
+     抽屉里   —— body.embedded，聊天页「一起听」的 iframe
+
+   2026-08-10 安可点单：「做的时候要考虑 chat 页的一起听功能，能不能显示完整，
+   该去的图标就去掉，毕竟 chat 页比较小塞不了那么多」，随后补了设计原则：
+   「缩成一个小胶囊的时候人家就只显示播放列表和歌词了，在音乐的主页面才给看个人主页」。
+   ——所以抽屉不是「等比缩小」，是「按场景裁功能」：她在抽屉里是来听的，不是来逛的。
+
+   实测抽屉 620px、iframe 只有 561px，比独立窗矮三分之一；更要命的是双层顶栏——
+   抽屉自己有一条（歌名/聊这句/分享/收起），播放器又顶一条（←/eryu/⤢），
+   两条一起吃掉 112px。而播放器这条在抽屉里三个键全是废的：
+     ← 返回   iframe 里返回没有意义，父页有「收起」
+     eryu     抽屉头已经在显示歌名，重复
+     ⤢ 迷你窗 缩窗是父页的事，iframe 里 resizeTo 根本无效
+   撤掉顶栏省 52px、导航瘦身省 18px，都还给内容区。 */
+const isEmbedded = (() => {
+  try { return window.self !== window.top; } catch { return true; }  // 跨域取不到 top 也算嵌着
+})();
+
+// ── API helpers ──
+async function api(path, opts) {
+  // Music 与兔牙主页共用 Caddy 门禁；浏览器不再各自保存第二枚 Eryu token。
+  const res = await fetch(path, { ...opts, headers: { ...(opts?.headers || {}) } });
+  let data = {};
+  try { data = await res.json(); } catch {}
+  if (!res.ok) throw new Error(data.error || `Music API ${res.status}`);
+  return data;
+}
+async function apiPost(path, body) {
+  return api(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+}
+
+// ── Toast ──
+let toastTimer = null;
+function showToast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 1800);
+}
+
+// ── LRC Parser ──
+function parseLrc(lrc) {
+  const lines = [];
+  for (const line of lrc.split('\n')) {
+    const m = line.match(/\[(\d+):(\d+)\.(\d+)\](.*)/);
+    if (m) {
+      const time = parseInt(m[1]) * 60 + parseInt(m[2]) + parseInt(m[3]) / (m[3].length === 2 ? 100 : 1000);
+      const text = m[4].trim();
+      if (text) lines.push({ time, text });
+    }
+  }
+  lines.sort((a, b) => a.time - b.time);
+  return lines;
+}
+
+// ── Time Format ──
+function fmt(s) {
+  if (!s || isNaN(s)) return '0:00';
+  return Math.floor(s / 60) + ':' + Math.floor(s % 60).toString().padStart(2, '0');
+}
+
+// ── Global Audio State ──
+const audio = new Audio();
+audio.preload = 'auto';
+
+const state = {
+  song: null,       // { name, artist, cover, songId, album }
+  playing: false,
+  progress: 0,      // 0..1
+  currentTime: 0,
+  duration: 0,
+  roam: false,
+  queue: [],
+  history: [],
+  listeners: new Set(),
+  songListeners: new Set(),
+};
+
+function notify() { state.listeners.forEach(fn => fn()); }
+function notifySong() { state.songListeners.forEach(fn => fn(state.song)); postSongToParent(); }
+
+/* ── 对外广播当前歌(2026-08-08 安可点单「想分享歌曲给小雾」)──────────────
+   聊天页把播放器嵌成 iframe 抽屉,靠这条 postMessage 知道现在在放什么,
+   才能一键把歌递给小雾。同源,但仍显式指定 targetOrigin,不用 '*'。
+   父页也可以主动喊一声 {type:'eryu:ask'},这边立刻回一条当前状态。 */
+function songSnapshot() {
+  const s = state.song;
+  if (!s) return null;
+  return {
+    songId: s.songId || '', name: s.name || '', artist: s.artist || '',
+    album: s.album || '', cover: s.cover || '', playing: !!state.playing,
+  };
+}
+function postSongToParent() {
+  if (window.parent === window) return;      // 独立标签打开时没人要听,省了
+  try {
+    window.parent.postMessage({ type: 'eryu:song', song: songSnapshot() }, location.origin);
+  } catch {}
+}
+/* ── 报「现在唱到哪一句」(2026-08-08 安可点单「时间戳附近自动读取歌词,一起聊歌词」)──
+   歌词本来只在打开歌词页时才解析(loadLyrics),所以这里自己按需取一份并缓存,
+   不逼她先点开歌词页。连原文带翻译一起给,前后各带一句当上下文。 */
+let lyricSnapCache = { songId: '', lines: [], trans: new Map() };
+
+async function fetchLyricFor(songId) {
+  if (lyricSnapCache.songId === songId && lyricSnapCache.lines.length) return lyricSnapCache;
+  const snap = { songId, lines: [], trans: new Map() };
+  try {
+    const d = await api('/music/lyric?id=' + songId);
+    if (d.ok && d.lrc) snap.lines = parseLrc(d.lrc);
+    if (d.tlyric) for (const tl of parseLrc(d.tlyric)) snap.trans.set(Math.round(tl.time * 100), tl.text);
+  } catch {}
+  lyricSnapCache = snap;
+  return snap;
+}
+
+async function postLyricNow() {
+  const s = state.song;
+  if (window.parent === window || !s?.songId) return;
+  const at = state.currentTime || 0;
+  const snap = await fetchLyricFor(String(s.songId));
+  let idx = -1;
+  for (let i = snap.lines.length - 1; i >= 0; i--) {
+    if (at >= snap.lines[i].time) { idx = i; break; }
+  }
+  const pick = (i) => {
+    const l = snap.lines[i];
+    if (!l) return null;
+    return { time: l.time, text: l.text, trans: snap.trans.get(Math.round(l.time * 100)) || '' };
+  };
+  const payload = {
+    type: 'eryu:lyric',
+    song: songSnapshot(),
+    at,
+    prev: pick(idx - 1),
+    line: pick(idx),
+    next: pick(idx + 1),
+    hasLyric: snap.lines.length > 0,
+  };
+  try { window.parent.postMessage(payload, location.origin); } catch {}
+}
+
+/* 8-31 安可:「能不能自选歌词发送」→ 同晚升级(她:「这个歌词更顺!抄!」,偷师果果家):
+   长按选句不再跑回聊天页——歌词页里浮出小输入条,想说的话就地写,「递过去」直接寄出
+   (eryu:lyric-send → 聊天端立发,带她的话和整包歌词)。 */
+let lyChatIdx = -1;
+function lyricPick(j) {
+  const l = lyricLines[j];
+  if (!l) return null;
+  return { time: l.time, text: l.text, trans: lyricTransMap.get(Math.round(l.time * 100)) || '' };
+}
+function openLyricChat(i) {
+  if (window.parent === window || !state.song?.songId) return;   // 独立窗没有聊天可寄
+  const bar = document.getElementById('ly-chatline');
+  const quote = document.getElementById('ly-chatline-quote');
+  if (!bar || !lyricLines[i]) return;
+  lyChatIdx = i;
+  const l = lyricLines[i];
+  quote.textContent = '「' + l.text + '」';
+  bar.hidden = false;
+  const input = document.getElementById('ly-chatline-input');
+  input.value = '';
+  input.focus();
+}
+function closeLyricChat() {
+  const bar = document.getElementById('ly-chatline');
+  if (bar) bar.hidden = true;
+  lyChatIdx = -1;
+}
+function sendLyricChat() {
+  if (lyChatIdx < 0 || !lyricLines[lyChatIdx]) return;
+  const note = (document.getElementById('ly-chatline-input')?.value || '').trim();
+  const payload = {
+    type: 'eryu:lyric-send', song: songSnapshot(), at: lyricLines[lyChatIdx].time,
+    prev: lyricPick(lyChatIdx - 1), line: lyricPick(lyChatIdx), next: lyricPick(lyChatIdx + 1),
+    note, hasLyric: true,
+  };
+  try { window.parent.postMessage(payload, location.origin); } catch {}
+  closeLyricChat();
+  showToast('递过去了 🎧');
+}
+document.addEventListener('click', (e) => {
+  if (e.target.closest('#ly-chatline-send')) sendLyricChat();
+  if (e.target.closest('#ly-chatline-close')) closeLyricChat();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && e.target.id === 'ly-chatline-input') sendLyricChat();
+});
+
+window.addEventListener('message', (ev) => {
+  if (ev.origin !== location.origin) return;
+  const d = ev.data || {};
+  if (d.type === 'eryu:ask') postSongToParent();
+  if (d.type === 'eryu:lyric-now') postLyricNow();
+  // 聊天页的歌曲卡片点「一起听」时打过来:直接放这首(2026-08-08)
+  if (d.type === 'eryu:play' && d.song && d.song.songId) {
+    // 8-31 安可的幻想成真款:歌词卡点一下,直接跳进那句的时间点(at 秒数随 eryu:play 捎来)。
+    // 五针(她报「弹回0:00/播0.5s又重播」):聊天页的双保险会把同一道 play 喊两次,
+    // 旧版每喊必重载=第二喊把歌拽回 0:00。现在**同曲免重载**:台上已是这首就不换碟,
+    // 只在唱针离目标 3 秒开外才挪针——双喊、重复点卡都不再打断。
+    const sid = String(d.song.songId);
+    const at = Number(d.at);
+    if (state.song && String(state.song.songId) === sid && audio.src) {
+      if (at > 0 && Math.abs(audio.currentTime - at) > 3) {
+        try { audio.currentTime = at; } catch {}
+      }
+      audio.play().catch(() => {});
+    } else {
+      loadAndPlay({
+        songId: sid, name: d.song.name || '', artist: d.song.artist || '',
+        album: d.song.album || '', cover: d.song.cover || '',
+      });
+      if (at > 0) {
+        audio.addEventListener('canplay', function seekOnce() {
+          audio.removeEventListener('canplay', seekOnce);
+          try { audio.currentTime = at; } catch {}
+        });
+      }
+    }
+  }
+});
+function onAudioChange(fn) { state.listeners.add(fn); return () => state.listeners.delete(fn); }
+function onSongChange(fn) { state.songListeners.add(fn); return () => state.songListeners.delete(fn); }
+
+let lastTickPost = 0;
+audio.addEventListener('timeupdate', () => {
+  state.currentTime = audio.currentTime;
+  state.duration = audio.duration || 0;
+  state.progress = state.duration ? audio.currentTime / state.duration : 0;
+  notify();
+  // 每秒给父页报一次进度,喂聊天页顶上那颗灵动岛胶囊(2026-08-08 安可点单)。
+  // timeupdate 一秒能跳四五次,不节流会把 postMessage 刷爆。
+  if (window.parent !== window) {
+    const now = Math.floor(state.currentTime);
+    if (now !== lastTickPost) {
+      lastTickPost = now;
+      try {
+        window.parent.postMessage({
+          type: 'eryu:tick', at: state.currentTime,
+          duration: state.duration, playing: state.playing,
+        }, location.origin);
+      } catch {}
+    }
+  }
+});
+audio.addEventListener('play', () => { state.playing = true; notify(); postSongToParent(); });
+audio.addEventListener('pause', () => { state.playing = false; notify(); postSongToParent(); });
+audio.addEventListener('ended', () => {
+  state.playing = false;
+  notify();
+  if (state.song) {
+    apiPost('/music/listen-complete', {
+      songId: state.song.songId,
+      name: state.song.name,
+      artist: state.song.artist
+    }).catch(() => {});
+  }
+  if (playMode === 'one' && state.song) {   // 单曲循环:原地再来一遍(听完计数照记)
+    audio.currentTime = 0;
+    audio.play().catch(() => {});
+    return;
+  }
+  playNext();
+});
+
+let loadSeq = 0;   // 十针:连点两首时旧的取歌作废,晚到的 url 不许倒车覆盖
+async function loadAndPlay(song) {
+  if (!song || !song.songId) return;
+  const my = ++loadSeq;
+  state.song = song;
+  notifySong();
+  // 8-31 兔牙家 remake:听歌计数接上电——上游有 /music/recent/add 记「最近在听+listenCount」,
+  // 但前端从来没喊过它,批注面板里的 0x played 就是这么来的。
+  if (song.songId) apiPost('/music/recent/add', { song }).catch(() => {});
+  // 十针:第一次听的歌服务器要现从网易拉整个 mp3,可能好几秒——给个响,别让她以为坏了
+  const slow = setTimeout(() => { if (loadSeq === my) showToast('取歌中…第一次听的歌要现搬'); }, 700);
+  try {
+    const d = await api('/music/url?id=' + song.songId);
+    clearTimeout(slow);
+    if (loadSeq !== my) return;          // 她已经点了别的,这趟作废
+    if (d.url) {
+      // 同源音频请求会沿用兔牙家的登录，内部 Eryu token 由 Caddy 安全注入。
+      audio.src = d.url;
+      audio.play().catch(() => {});
+    } else {
+      showToast('这首没取到播放源');
+    }
+  } catch (e) {
+    clearTimeout(slow);
+    if (loadSeq === my) showToast('取歌失败,再点一次试试');
+    console.error('loadAndPlay error', e);
+  }
+}
+
+function togglePlay() {
+  if (audio.paused) audio.play().catch(() => {});
+  else audio.pause();
+}
+
+function setQueue(songs) { state.queue = songs.slice(); renderNpBar(); }
+function addToQueue(song) { state.queue.push(song); showToast('排进「接下来播」了'); renderNpBar(); if (typeof renderQueue === 'function') renderQueue(); }
+
+async function playNext() {
+  // 八针顺位:①优先队列(手动/远程插的) ②播放上下文(按模式) ③漫游
+  if (state.queue.length > 0) {
+    if (state.song) state.history.push(state.song);
+    loadAndPlay(state.queue.shift());
+    renderNpBar();
+    return;
+  }
+  if (state.ctx.length > 0) {
+    if (state.song) state.history.push(state.song);
+    const pick = playMode === 'shuffle'
+      ? state.ctx.splice(Math.floor(Math.random() * state.ctx.length), 1)[0]
+      : state.ctx.shift();
+    loadAndPlay(pick);
+    renderNpBar();
+    return;
+  }
+  if (state.roam && state.song?.songId) {
+    try {
+      const d = await api('/music/roam?id=' + state.song.songId);
+      if (d.ok && d.song) {
+        loadAndPlay({
+          name: d.song.name, artist: d.song.artist,
+          cover: d.song.cover || '', songId: d.song.id || d.song.songId, album: d.song.album
+        });
+        return;
+      }
+    } catch {}
+  }
+}
+
+function playPrev() {
+  if (audio.currentTime > 3) {
+    audio.currentTime = 0;
+    return;
+  }
+  if (state.history.length > 0) {
+    loadAndPlay(state.history.pop());
+  }
+}
+
+// ── Independent player window / system media controls ──
+const FULL_WINDOW_SIZE = { width: 430, height: 820 };
+const MINI_WINDOW_SIZE = { width: 360, height: 150 };
+let mediaSessionSongKey = '';
+let miniResizeCheck = 0;
+let mobileReturnFallback = 0;
+
+function resizePlayerWindow(size) {
+  // Browsers only allow resizing script-opened desktop windows. Mobile safely ignores it.
+  try { window.resizeTo(size.width, size.height); } catch {}
+}
+
+function updatePlayerTitle() {
+  document.title = state.song ? `${state.song.name} · 一起听` : '一起听';
+}
+
+function canUseDesktopMiniWindow() {
+  // resizeTo 只对脚本打开的桌面细指针窗口可靠；手机/平板会忽略缩窗请求。
+  return Boolean(window.opener && !window.opener.closed)
+    && window.matchMedia('(pointer: fine)').matches
+    && !window.matchMedia('(display-mode: standalone)').matches;
+}
+
+function minimizeMusicWindow() {
+  if (!state.song) {
+    showToast('先放一首歌吧');
+    return false;
+  }
+  if (!canUseDesktopMiniWindow()) {
+    document.body.classList.remove('window-mini');
+    updatePlayerTitle();
+    showToast('手机会继续后台播放，点左上角就能回家');
+    return false;
+  }
+  closeLyrics();
+  closeMemory();
+  closeComments();
+  closeQueue();
+  closeMv();
+  closeAddToList();
+  document.body.classList.add('window-mini');
+  updatePlayerTitle();
+  resizePlayerWindow(MINI_WINDOW_SIZE);
+  window.clearTimeout(miniResizeCheck);
+  miniResizeCheck = window.setTimeout(() => {
+    miniResizeCheck = 0;
+    if (!document.body.classList.contains('window-mini')) return;
+    // 桌面浏览器也可能因窗口策略拒绝 resizeTo；这时立即还原，绝不留下整屏“假小窗”。
+    if (window.outerHeight > MINI_WINDOW_SIZE.height + 130) {
+      document.body.classList.remove('window-mini');
+      updatePlayerTitle();
+      showToast('浏览器没允许缩窗，已经恢复完整播放器');
+    }
+  }, 320);
+  return true;
+}
+
+function expandMusicWindow() {
+  window.clearTimeout(miniResizeCheck);
+  miniResizeCheck = 0;
+  document.body.classList.remove('window-mini');
+  updatePlayerTitle();
+  if (canUseDesktopMiniWindow()) resizePlayerWindow(FULL_WINDOW_SIZE);
+}
+
+function returnHomeWithoutStopping() {
+  // 先让原生 target 尝试切回主页；桌面弹窗同时缩成真正的小窗。
+  if (window.opener && !window.opener.closed) {
+    try { window.opener.name = 'tutooth-home'; } catch {}
+  }
+  if (canUseDesktopMiniWindow()) {
+    if (state.song) minimizeMusicWindow();
+    return;
+  }
+
+  document.body.classList.remove('window-mini');
+  showToast('正在回家…');
+  window.clearTimeout(mobileReturnFallback);
+  mobileReturnFallback = window.setTimeout(() => {
+    mobileReturnFallback = 0;
+    // 2026-08-08 安可报「手机上一点返回就退出了,压根没在继续播放」。
+    // 原来这里是 location.assign('/')——把播放器这一页直接导航走,音乐必死。
+    // 初衷是「别让她被困住」,但代价太大:手机 web 的音频只要文档一卸载就停,
+    // 后台标签才活得下去。所以改成:主页已经在另一个标签开好了,这里只提示怎么切,
+    // 音乐照唱。真想强制跳转,给她一个明确的按钮自己按,不替她做主。
+    if (document.visibilityState === 'visible' && location.pathname.startsWith('/music')) {
+      showStuckHint();
+    }
+  }, 1200);
+}
+
+let stuckHintEl = null;
+function showStuckHint() {
+  if (stuckHintEl) return;
+  stuckHintEl = document.createElement('div');
+  stuckHintEl.className = 'stuck-hint';
+  stuckHintEl.innerHTML = `
+    <span>主页已经在另一个标签开好啦，从标签栏切过去就行 —— 这边继续唱着。</span>
+    <button type="button" data-act="go">还是直接跳过去（会停止播放）</button>
+    <button type="button" data-act="stay">知道了</button>`;
+  stuckHintEl.addEventListener('click', (ev) => {
+    const act = ev.target.closest('button')?.dataset.act;
+    if (!act) return;
+    if (act === 'go') location.assign('/');
+    stuckHintEl.remove();
+    stuckHintEl = null;
+  });
+  document.body.appendChild(stuckHintEl);
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') {
+    window.clearTimeout(mobileReturnFallback);
+    mobileReturnFallback = 0;
+  }
+});
+
+/* ── 返回键接管(2026-08-08 安可点单)────────────────────────────────────────
+   手机上播放器是 window.open 出来的新标签,**没有历史记录**。
+   浏览器的规矩:没历史可退时按返回 = 关掉这个标签 = 文档卸载 = 音乐当场停。
+   安可的原话:「手机上一点返回就退出了,压根就没有在继续播放」。
+
+   做法:进页面先垫一格历史,把返回键接管过来——按返回不再关标签,而是走「回家」
+   那条不杀音乐的路(切到主页标签,播放器留在后台继续唱)。每次接管后把格子垫回去,
+   免得连按两下又退到关标签。
+   只在手机/没有桌面小窗能力的场景接管;桌面弹窗本来就有自己的关窗逻辑,不掺和。 */
+function installBackGuard() {
+  if (window.matchMedia('(pointer: fine)').matches && window.opener && !window.opener.closed) return;
+  try { history.pushState({ eryuGuard: 1 }, ''); } catch { return; }
+  window.addEventListener('popstate', () => {
+    try { history.pushState({ eryuGuard: 1 }, ''); } catch {}
+    if (state.playing || state.song) {
+      // 走和左上角「回家」按钮完全同一条路:先让原生 target 去切主页标签,
+      // 切不过去再弹提示。直接调函数是不够的——anchor 的 target 只认真实点击。
+      const homeBtn = document.getElementById('music-home-btn');
+      if (homeBtn) homeBtn.click(); else returnHomeWithoutStopping();
+    } else {
+      // 没在放歌就别拦她,老老实实回家
+      location.assign('/');
+    }
+  });
+}
+
+function syncMediaSession() {
+  if (!('mediaSession' in navigator) || !state.song) return;
+
+  const songKey = String(state.song.songId || `${state.song.name}|${state.song.artist}`);
+  if (songKey !== mediaSessionSongKey && 'MediaMetadata' in window) {
+    const artwork = [];
+    if (state.song.cover) {
+      try { artwork.push({ src: new URL(state.song.cover, location.href).href }); } catch {}
+    }
+    try {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: state.song.name || '一起听',
+        artist: state.song.artist || '兔牙家',
+        album: state.song.album || '',
+        artwork
+      });
+      mediaSessionSongKey = songKey;
+    } catch {}
+  }
+
+  try { navigator.mediaSession.playbackState = state.playing ? 'playing' : 'paused'; } catch {}
+  if (Number.isFinite(state.duration) && state.duration > 0 && Number.isFinite(state.currentTime)) {
+    try {
+      navigator.mediaSession.setPositionState({
+        duration: state.duration,
+        playbackRate: audio.playbackRate || 1,
+        position: Math.min(state.duration, Math.max(0, state.currentTime))
+      });
+    } catch {}
+  }
+}
+
+function setupMediaSession() {
+  if (!('mediaSession' in navigator)) return;
+  const actions = {
+    play: () => audio.play().catch(() => {}),
+    pause: () => audio.pause(),
+    previoustrack: playPrev,
+    nexttrack: playNext,
+    seekto: details => {
+      if (Number.isFinite(details.seekTime) && state.duration) {
+        audio.currentTime = Math.min(state.duration, Math.max(0, details.seekTime));
+      }
+    }
+  };
+  Object.entries(actions).forEach(([action, handler]) => {
+    try { navigator.mediaSession.setActionHandler(action, handler); } catch {}
+  });
+}
+
+function toggleRoam() {
+  state.roam = !state.roam;
+  notify();
+}
+
+// ── Escape HTML ──
+function esc(s) {
+  if (!s) return '';
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// ── 封面:缺失或加载失败时露出奶油底玫瑰音符占位(纯展示,不影响数据) ──
+function coverBox(url, cls) {
+  const safe = url ? esc(url) : '';
+  const img = safe ? `<img src="${safe}" alt="" loading="lazy" onerror="this.classList.add('gone')">` : '';
+  return `<div class="coverbx ${cls}">${img}</div>`;
+}
+
+// ══════════════════════════════════════════
+// ── App Router / Renderer ──
+// ══════════════════════════════════════════
+
+// 抽屉里没有 Home tab，落地就落在「播放列表」；独立窗照旧从个人主页开始。
+let currentTab = isEmbedded ? 'playlists' : 'home';
+let lyricsOpen = false;
+let memoryOpen = false;
+let playlistDetail = null; // playlist meta object or null
+
+// ── Re-render on audio change ──
+let npBarEl = null;
+onAudioChange(() => { renderNpBar(); renderLyricsProgress(); });
+onSongChange(() => { renderNpBar(); loadLyrics(); });
+
+// ── Initial render ──
+function init() {
+  if (isEmbedded) document.body.classList.add('embedded');
+  renderApp();
+  // 返回键接管只在独立窗装。抽屉里 pushState 会搅乱聊天页自己的后退行为，
+  // 而且那里根本不需要「别把标签关了」——收起抽屉音乐照样在唱。
+  if (!isEmbedded) installBackGuard();
+
+  // 药丸首帧就位（无动画），之后跟着窗口/抽屉尺寸变化重新量。
+  requestAnimationFrame(() => moveNavInk({ silent: true }));
+  window.addEventListener('resize', () => moveNavInk({ silent: true }));
+}
+
+function renderApp() {
+  const app = document.getElementById('app');
+
+  /* 抽屉里整条顶栏不生成（不是 display:none —— 干脆不渲染，省 52px 也省三个废按钮）。
+     顺带 Home 那个 tab 也不给：个人主页、换背景图、签名都是「逛」的功能，
+     抽屉里她是来「听」的。安可 8-10：「在音乐的主页面才给看个人主页，信息什么的」。 */
+  const topbarHTML = isEmbedded ? '' : `
+    <div class="topbar">
+      <a class="topbar-btn" id="music-home-btn" href="/" target="tutooth-home" title="回到兔牙家" aria-label="回到兔牙家">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+      </a>
+      <!-- 8-31 名字四代史见 HOUSE.md;20:59 安可:「页头写二鱼开源会带上,撤了吧」——
+           牌子改中性的「一起听」(功能即名字,不带家梗);二鱼转入口头乳名保护区 -->
+      <div class="topbar-title">music</div>
+      <button class="topbar-btn" id="music-mini-btn" type="button" title="缩成迷你播放器" aria-label="缩成迷你播放器">
+        <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H3v5M16 21h5v-5M3 3l6 6M21 21l-6-6"/></svg>
+      </button>
+    </div>`;
+
+  const homeNavHTML = isEmbedded ? '' : `
+      <button class="nav-item${currentTab === 'home' ? ' active' : ''}" data-tab="home">
+        <svg viewBox="0 0 24 24" width="20" height="20"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+        <span>Home</span>
+      </button>`;
+
+  app.innerHTML = `
+    <div class="app-bg" id="app-bg"></div>
+    ${topbarHTML}
+    <div class="tab-body" id="tab-body"></div>
+    <div class="np-bar hidden" id="np-bar"></div>
+    <nav class="bottom-nav" id="bottom-nav">
+      ${homeNavHTML}
+      <button class="nav-item${currentTab === 'playlists' ? ' active' : ''}" data-tab="playlists">
+        <svg viewBox="0 0 24 24" width="20" height="20"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+        <span>Playlists</span>
+      </button>
+      <button class="nav-item${currentTab === 'discover' ? ' active' : ''}" data-tab="discover">
+        <svg viewBox="0 0 24 24" width="20" height="20"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <span>Discover</span>
+      </button>
+      <span class="nav-ink" id="nav-ink" aria-hidden="true"></span>
+    </nav>
+    <div class="lyrics-view hidden" id="lyrics-view"></div>
+    <div class="memory-view hidden" id="memory-view"></div>
+    <div class="memory-view hidden" id="comments-view"></div>
+    <div class="memory-view hidden" id="queue-view"></div>
+    <div class="mv-view hidden" id="mv-view"></div>
+    <div class="memory-view hidden" id="addlist-view"></div>`;
+
+  // Nav tabs
+  document.getElementById('bottom-nav').addEventListener('click', e => {
+    const btn = e.target.closest('.nav-item');
+    if (!btn) return;
+    const tab = btn.dataset.tab;
+    if (tab && tab !== currentTab) {
+      currentTab = tab;
+      playlistDetail = null;
+      // 药丸先动（它不用等数据），内容随后逐行浮起 —— 手指一抬就有反馈。
+      updateNavActive();
+      const body = document.getElementById('tab-body');
+      body.classList.remove('tab-enter');
+      void body.offsetWidth;                  // 重启动画，不然连点同一方向没反应
+      body.classList.add('tab-enter');
+      body.scrollTop = 0;
+      renderTab();
+    }
+  });
+
+  // 抽屉形态没渲染顶栏，这两颗按钮不存在 —— 不判空的话整个 renderApp 断在这里，
+  // 后面的 renderTab 全不执行，内容区一片空白（8-10 验收当场撞到过）。
+  document.getElementById('music-home-btn')?.addEventListener('click', returnHomeWithoutStopping);
+  document.getElementById('music-mini-btn')?.addEventListener('click', minimizeMusicWindow);
+
+  // NP bar tap -> open lyrics
+  document.getElementById('np-bar').addEventListener('click', e => {
+    if (e.target.closest('.np-btn') || e.target.closest('.np-next-btn')) return;
+    if (document.body.classList.contains('window-mini')) {
+      expandMusicWindow();
+      return;
+    }
+    openLyrics();
+  });
+
+  renderTab();
+  renderNpBar();
+}
+
+function updateNavActive({ silent = false } = {}) {
+  document.querySelectorAll('.nav-item').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.tab === currentTab);
+  });
+  moveNavInk({ silent });
+}
+
+/* 药丸跟着选中项滑。JS 只量位置，缓动交给 CSS（--ease-out）。
+   silent = 首次定位，别让药丸从左上角一路滑过来。 */
+function moveNavInk({ silent = false } = {}) {
+  const ink = document.getElementById('nav-ink');
+  const active = document.querySelector('.nav-item.active');
+  if (!ink || !active) return;
+  const nav = ink.parentElement;
+  const a = active.getBoundingClientRect();
+  const n = nav.getBoundingClientRect();
+  if (!a.width) return;                       // 还没布局好（抽屉刚挂上），等下一轮
+  if (silent) ink.classList.add('silent');
+  ink.style.setProperty('--x', (a.left - n.left) + 'px');
+  ink.style.setProperty('--w', a.width + 'px');
+  if (silent) {
+    void ink.offsetWidth;                     // 强制回流，让 silent 这一帧真正生效
+    ink.classList.remove('silent');
+  }
+}
+
+// ══════════════════════════════════════════
+// ── Tab Rendering ──
+// ══════════════════════════════════════════
+
+function renderTab() {
+  const body = document.getElementById('tab-body');
+  if (!body) return;
+  if (currentTab === 'home') renderHome(body);
+  else if (currentTab === 'playlists') renderPlaylists(body);
+  else if (currentTab === 'discover') renderDiscover(body);
+}
+
+// ── HOME TAB ──
+let homeProfile = null;
+let homeRecent = [];
+
+async function renderHome(container) {
+  container.innerHTML = '<div class="home-tab"><div class="spinner"></div></div>';
+
+  const [profRes, recentRes] = await Promise.all([
+    api('/music/profile').catch(() => ({})),
+    api('/music/recent').catch(() => ({}))
+  ]);
+  if (profRes.ok) homeProfile = profRes.profile;
+  if (recentRes.ok) homeRecent = recentRes.songs || [];
+
+  if (!homeProfile) homeProfile = { name: '', signature: '', avatar: '', bg: '' };
+
+  // Set app bg
+  if (homeProfile.appBg) {
+    const bgEl = document.getElementById('app-bg');
+    if (bgEl) bgEl.style.backgroundImage = 'url(' + homeProfile.appBg + ')';
+  }
+
+  container.innerHTML = buildHomeHTML();
+  bindHomeEvents(container);
+}
+
+/* 「最近在听」独立成块：独立窗挂在个人主页下面，抽屉里挂在播放列表顶上。
+   它是「听」的功能不是「逛」的功能，所以裁掉个人主页时它得留下来。
+   data-stagger 是入场编排的锚点，见 .stagger-in。 */
+function buildRecentSection() {
+  const title = isEmbedded ? '最近在听' : 'Recently Played';
+  if (homeRecent.length === 0) {
+    return `<div class="section"><div class="section-hd">${title}</div>
+      <div class="empty-line">还没听过歌 — 去 Discover 挑一首</div></div>`;
+  }
+  // 抽屉矮，只给 8 条；独立窗给 20 条。
+  const rows = homeRecent.slice(0, isEmbedded ? 8 : 20).map((s, i) => `
+        <div class="recent-row stagger-in" data-idx="${i}" style="--i:${i}">
+          ${coverBox(s.cover, 'recent-row-cover')}
+          <div class="recent-row-info">
+            <div class="recent-row-name">${esc(s.name)}</div>
+            <div class="recent-row-artist">${esc(s.artist)}</div>
+          </div>
+        </div>`).join('');
+  return `<div class="section"><div class="section-hd">${title}</div>
+    <div class="recent-list">${rows}</div></div>`;
+}
+
+function buildHomeHTML() {
+  const p = homeProfile;
+  const heroStyle = p.bg ? ` style="background-image:url(${esc(p.bg)}); background-size:cover; background-position:center;"` : '';
+  const heroInner = p.bg ? '' : '<div class="hero-hint"><span class="hero-note">♪</span><span>点这里,换一张家里的背景图</span></div>';
+
+  const recentHTML = buildRecentSection();
+
+  return `<div class="home-tab">
+    <div class="home-card">
+      <div class="home-hero" id="home-hero"${heroStyle}>${heroInner}</div>
+      <div class="home-profile">
+        <div class="home-avatar" id="home-avatar">
+          ${p.avatar ? '<img src="' + esc(p.avatar) + '" alt="" />' : '<span>+</span>'}
+        </div>
+        <div class="home-name" id="home-name">${esc(p.name) || 'tap to set name'}</div>
+        <div class="home-sig" id="home-sig">${esc(p.signature) || 'tap to add signature...'}</div>
+      </div>
+    </div>
+    ${recentHTML}
+  </div>`;
+}
+
+function bindHomeEvents(container) {
+  // Recent rows
+  container.querySelectorAll('.recent-row').forEach(row => {
+    row.addEventListener('click', () => {
+      const i = parseInt(row.dataset.idx);
+      const s = homeRecent[i];
+      if (s) playSong(s);
+    });
+  });
+
+  // Edit name
+  const nameEl = container.querySelector('#home-name');
+  if (nameEl) nameEl.addEventListener('click', () => startEditField('name'));
+
+  // Edit sig
+  const sigEl = container.querySelector('#home-sig');
+  if (sigEl) sigEl.addEventListener('click', () => startEditField('sig'));
+
+  // Avatar
+  const avatarEl = container.querySelector('#home-avatar');
+  if (avatarEl) avatarEl.addEventListener('click', () => pickImage(300, url => {
+    homeProfile.avatar = url;
+    updateProfile({ avatar: url });
+    renderTab();
+  }));
+
+  // Hero BG
+  const heroEl = container.querySelector('#home-hero');
+  if (heroEl) heroEl.addEventListener('click', () => pickImage(800, url => {
+    homeProfile.bg = url;
+    updateProfile({ bg: url });
+    renderTab();
+  }));
+}
+
+function startEditField(field) {
+  const p = homeProfile;
+  const isName = field === 'name';
+  const current = isName ? (p.name || '') : (p.signature || '');
+  const targetId = isName ? 'home-name' : 'home-sig';
+  const el = document.getElementById(targetId);
+  if (!el) return;
+
+  el.outerHTML = `<div class="home-edit-wrap" id="edit-wrap">
+    <input class="home-edit-input" id="edit-input" value="${esc(current)}" placeholder="${isName ? 'name' : 'write something...'}" autofocus ${isName ? 'style="font-weight:700;font-size:15px;"' : ''} />
+    <button class="home-edit-ok" id="edit-ok">OK</button>
+  </div>`;
+
+  const input = document.getElementById('edit-input');
+  const okBtn = document.getElementById('edit-ok');
+  input.focus();
+
+  const save = () => {
+    const val = input.value;
+    if (isName) { homeProfile.name = val; updateProfile({ name: val }); }
+    else { homeProfile.signature = val; updateProfile({ signature: val }); }
+    renderTab();
+  };
+  okBtn.addEventListener('click', save);
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') save(); });
+}
+
+function updateProfile(patch) {
+  apiPost('/music/profile', patch).catch(() => {});
+}
+
+function pickImage(maxSize, cb) {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'image/*';
+  input.onchange = () => {
+    const f = input.files?.[0];
+    if (!f) return;
+    readImageAsDataURL(f, maxSize).then(cb).catch(() => {});
+  };
+  input.click();
+}
+
+function readImageAsDataURL(file, maxDim) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let w = img.width, h = img.height;
+        if (w > maxDim || h > maxDim) {
+          if (w > h) { h = Math.round(h * maxDim / w); w = maxDim; }
+          else { w = Math.round(w * maxDim / h); h = maxDim; }
+        }
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', 0.85));
+      };
+      img.onerror = reject;
+      img.src = reader.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+// ── PLAYLISTS TAB ──
+let playlists = [];
+let plDetailSongs = [];
+let plCreating = false;
+
+let neteaseLists = [];   // 8-31 网易云歌单只读镜像(安可账号,cookie 就在家里)
+
+async function renderPlaylists(container) {
+  if (playlistDetail) {
+    renderPlaylistDetail(container);
+    return;
+  }
+
+  container.innerHTML = '<div class="pls-tab"><div class="spinner"></div></div>';
+
+  /* 抽屉里没有 Home tab，「最近在听」就得在这儿落脚，顺手把 recent 一起取了。 */
+  const [d, recentRes, nd] = await Promise.all([
+    api('/music/playlists').catch(() => ({})),
+    isEmbedded ? api('/music/recent').catch(() => ({})) : Promise.resolve(null),
+    api('/music/netease/playlists').catch(() => ({}))
+  ]);
+  if (d.ok) playlists = d.playlists || [];
+  if (recentRes && recentRes.ok) homeRecent = recentRes.songs || [];
+
+  let html = `<div class="pls-tab">
+    <div class="pls-hd">
+      <span class="pls-title">${isEmbedded ? '歌单' : 'Playlists'}</span>
+      <button class="pls-add" id="pls-add-btn">+</button>
+    </div>
+    <div id="pls-create-area"></div>
+    <div class="pls-list" id="pls-list">`;
+
+  playlists.forEach((pl, i) => {
+    const coverStyle = pl.cover ? ` style="background-image:url(${esc(pl.cover)})"` : '';
+    html += `
+      <div class="pls-row stagger-in" data-idx="${i}" style="--i:${i}">
+        <div class="pls-row-cover"${coverStyle}>
+          ${!pl.cover ? '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.3"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>' : ''}
+        </div>
+        <div class="pls-row-info">
+          <div class="pls-row-name">${esc(pl.name)}</div>
+          <div class="pls-row-count">${pl.count || 0} songs</div>
+        </div>
+        ${(pl.id !== 'liked' && pl.id !== 'shenyu_liked') ? `<button class="pls-row-del" data-del="${i}"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>` : ''}
+      </div>`;
+  });
+
+  if (playlists.length === 0) {
+    html += `<div class="empty-line">还没有歌单 — 点右上角 + 建一个</div>`;
+  }
+
+  /* 8-31 安可:「既然都能用自己的账号了,能不能同步自己的歌单呢🥺」——
+     网易云歌单只读镜像:她的账号她的单,点进去照常放,不改不删云端任何东西 */
+  neteaseLists = (nd && nd.ok) ? (nd.playlists || []).map(p => ({ ...p, netease: true })) : [];
+  if (neteaseLists.length) {
+    html += `</div>
+    <div class="pls-hd" style="margin-top:16px"><span class="pls-title">☁ ${esc(nd.nickname || '网易云')} 的歌单</span></div>
+    <div class="pls-list">`;
+    neteaseLists.forEach((pl, i) => {
+      const coverStyle = pl.cover ? ` style="background-image:url(${esc(pl.cover)})"` : '';
+      html += `
+      <div class="pls-row stagger-in" data-nidx="${i}" style="--i:${i}">
+        <div class="pls-row-cover"${coverStyle}></div>
+        <div class="pls-row-info">
+          <div class="pls-row-name">${esc(pl.name)}</div>
+          <div class="pls-row-count">${pl.count || 0} songs · ${pl.mine ? '自建' : '收藏'}</div>
+        </div>
+      </div>`;
+    });
+  }
+
+  // 8-31 安可:「想把歌单放在最上面」——歌单区(本地+☁)在顶,最近在听/日推挪到底下
+  html += '</div>' + (isEmbedded ? buildRecentSection() : '') + '</div>';
+  container.innerHTML = html;
+
+  // 抽屉里「最近在听」也挂在这一页，点了就放
+  container.querySelectorAll('.recent-row').forEach(row => {
+    row.addEventListener('click', () => {
+      const s = homeRecent[parseInt(row.dataset.idx)];
+      if (s) playSong(s);
+    });
+  });
+
+  // Bind
+  document.getElementById('pls-add-btn').addEventListener('click', () => showCreatePlaylist());
+  container.querySelectorAll('.pls-row').forEach(row => {
+    row.addEventListener('click', e => {
+      if (e.target.closest('.pls-row-del')) return;
+      if (row.dataset.nidx !== undefined) {          // 网易云镜像单
+        playlistDetail = neteaseLists[parseInt(row.dataset.nidx)];
+        renderTab();
+        return;
+      }
+      const i = parseInt(row.dataset.idx);
+      playlistDetail = playlists[i];
+      renderTab();
+    });
+  });
+  container.querySelectorAll('.pls-row-del').forEach(btn => {
+    btn.addEventListener('click', async e => {
+      e.stopPropagation();
+      const i = parseInt(btn.dataset.del);
+      const pl = playlists[i];
+      if (pl) {
+        await apiPost('/music/playlists/delete', { id: pl.id });
+        playlists.splice(i, 1);
+        renderTab();
+      }
+    });
+  });
+}
+
+function showCreatePlaylist() {
+  const area = document.getElementById('pls-create-area');
+  if (!area) return;
+  area.innerHTML = `<div class="pls-create">
+    <input class="pls-create-input" id="pls-new-name" placeholder="playlist name..." autofocus />
+    <button class="pls-create-ok" id="pls-new-ok">Create</button>
+    <button class="pls-create-cancel" id="pls-new-cancel"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+  </div>`;
+  document.getElementById('pls-new-name').focus();
+  document.getElementById('pls-new-ok').addEventListener('click', createPlaylist);
+  document.getElementById('pls-new-name').addEventListener('keydown', e => { if (e.key === 'Enter') createPlaylist(); });
+  document.getElementById('pls-new-cancel').addEventListener('click', () => { area.innerHTML = ''; });
+}
+
+async function createPlaylist() {
+  const name = document.getElementById('pls-new-name')?.value?.trim();
+  if (!name) return;
+  const d = await apiPost('/music/playlists/create', { name });
+  if (d.ok) {
+    playlists.push(d.playlist);
+    renderTab();
+  }
+}
+
+async function renderPlaylistDetail(container) {
+  const pl = playlistDetail;
+  container.innerHTML = '<div class="pl-detail"><div class="spinner"></div></div>';
+
+  const d = pl.netease
+    ? await api('/music/netease/playlist?id=' + pl.id + '&limit=500').catch(() => ({}))
+    : await api('/music/playlists/songs?id=' + encodeURIComponent(pl.id)).catch(() => ({}));
+  plDetailSongs = d.ok ? (d.songs || []) : [];
+
+  /* 8-18 安可点单「参考图那种排版,玻璃做」:大头卡(封面+PLAYLIST眉题+歌单名+meta+圆形播放钮)
+     + 列表加列头,像正经唱片行的目录页。返回键留在卡外一行,免得压住封面角。 */
+  const heroCover = pl.cover || plDetailSongs[0]?.cover || '';
+  let html = `<div class="pl-detail">
+    <div class="pl-detail-hd">
+      <button class="back-btn" id="pl-back"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M15 18l-6-6 6-6"/></svg></button>
+    </div>
+    <div class="pl-hero stagger-in" style="--i:0">
+      ${coverBox(heroCover, 'pl-hero-cover')}
+      <div class="pl-hero-info">
+        <div class="pl-hero-eyebrow">PLAYLIST</div>
+        <div class="pl-detail-title" id="pl-title">${esc(pl.name)}</div>
+        <div class="pl-hero-meta">${pl.netease ? `网易云 ☁ ${plDetailSongs.length}${(pl.count || 0) > plDetailSongs.length ? '/' + pl.count : ''} songs` : `♡ ${plDetailSongs.length} songs`}</div>
+      </div>
+      ${plDetailSongs.length > 0 ? `<button class="pl-play-fab" id="pl-play-all" aria-label="Play all"><svg viewBox="0 0 24 24" width="17" height="17"><polygon points="6,3 21,12 6,21" fill="currentColor"/></svg></button>` : ''}
+    </div>`;
+
+  if (plDetailSongs.length === 0) {
+    html += `<div class="empty-line">歌单还是空的 — 去 Discover 搜歌,点爱心收进来</div></div>`;
+    container.innerHTML = html;
+  } else {
+  html += `<div class="song-list stagger-in" style="--i:1">
+    <div class="song-cols" aria-hidden="true"><span class="song-cols-idx">#</span><span class="song-cols-title">TITLE</span><span class="song-cols-like">♡</span></div>`;
+  plDetailSongs.forEach((s, i) => {
+    const isActive = state.song?.songId === s.songId;
+    const liked = !!(s.songId && likedIds.has(s.songId));
+    html += `
+      <div class="song-row ${isActive ? 'active' : ''}" data-idx="${i}">
+        <div class="song-idx">${i + 1}</div>
+        ${coverBox(s.cover, 'song-cover')}
+        <div class="song-info">
+          <div class="song-name">${esc(s.name)}</div>
+          <div class="song-artist">${esc(s.artist)}${s.addedBy ? ' · ' + esc(s.addedBy) : ''}</div>
+        </div>
+        <button class="like-btn song-like${liked ? ' liked' : ''}" data-like="${i}" aria-label="收藏">${heartSvg(liked)}</button>
+        ${pl.netease ? '' : `<button class="song-rm" data-rm="${i}"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>`}
+      </div>`;
+  });
+  html += '</div></div>';
+  container.innerHTML = html;
+  }
+
+  // 行内爱心:就地翻面,不整页重画(重画会把滚动位置弄丢)
+  container.querySelectorAll('.song-like').forEach(btn => {
+    btn.addEventListener('click', async e => {
+      e.stopPropagation();
+      const i = parseInt(btn.dataset.like);
+      const s = plDetailSongs[i];
+      if (!s) return;
+      await likeSong(s);
+      const on = !!(s.songId && likedIds.has(s.songId));
+      btn.classList.toggle('liked', on);
+      btn.innerHTML = heartSvg(on);
+    });
+  });
+
+  // Back
+  document.getElementById('pl-back').addEventListener('click', () => {
+    playlistDetail = null;
+    renderTab();
+  });
+
+  // Play all
+  const playAllBtn = document.getElementById('pl-play-all');
+  if (playAllBtn) {
+    playAllBtn.addEventListener('click', () => {
+      if (plDetailSongs.length > 0) {
+        playSong(plDetailSongs[0], plDetailSongs.slice(1));
+      }
+    });
+  }
+
+  // Rename
+  const titleEl = document.getElementById('pl-title');
+  if (titleEl && pl.id !== 'liked' && pl.id !== 'shenyu_liked') {
+    titleEl.style.cursor = 'pointer';
+    titleEl.addEventListener('click', () => {
+      titleEl.outerHTML = `<div class="pl-rename" id="pl-rename-wrap">
+        <input class="pl-rename-input" id="pl-rename-input" value="${esc(pl.name)}" autofocus />
+        <button class="pl-rename-ok" id="pl-rename-ok">OK</button>
+      </div>`;
+      document.getElementById('pl-rename-input').focus();
+      const doRename = async () => {
+        const newName = document.getElementById('pl-rename-input')?.value?.trim();
+        if (newName) {
+          await apiPost('/music/playlists/rename', { id: pl.id, name: newName });
+          pl.name = newName;
+        }
+        renderTab();
+      };
+      document.getElementById('pl-rename-ok').addEventListener('click', doRename);
+      document.getElementById('pl-rename-input').addEventListener('keydown', e => { if (e.key === 'Enter') doRename(); });
+    });
+  }
+
+  // Song rows
+  container.querySelectorAll('.song-row').forEach(row => {
+    row.querySelector('.song-cover')?.addEventListener('click', () => {
+      const i = parseInt(row.dataset.idx);
+      playSong(plDetailSongs[i], plDetailSongs.slice(i + 1));
+    });
+    row.querySelector('.song-info')?.addEventListener('click', () => {
+      const i = parseInt(row.dataset.idx);
+      playSong(plDetailSongs[i], plDetailSongs.slice(i + 1));
+    });
+  });
+
+  // Remove song
+  container.querySelectorAll('.song-rm').forEach(btn => {
+    btn.addEventListener('click', async e => {
+      e.stopPropagation();
+      const i = parseInt(btn.dataset.rm);
+      const s = plDetailSongs[i];
+      if (s) {
+        await apiPost('/music/playlists/remove-song', { playlistId: pl.id, songId: s.songId });
+        plDetailSongs.splice(i, 1);
+        renderTab();
+      }
+    });
+  });
+}
+
+// ── DISCOVER TAB ──
+let searchResults = [];
+let searchTouched = false;
+let dailySongs = [];
+let dailySeed = '';
+let likedIds = new Set();
+/* 8-31 九针(安可:「歌单红心退出就没啦,网易云同步过来的喜欢列表全是空心」)——两个病根:
+   ①红心账本只在逛 Discover 时才装载,开机不装=重进全空心;
+   ②账本只记本地喜欢单,她网易云 5341 颗心从没入账,镜像歌单当然全空心。
+   修:开机就装,本地+网易云红心全量合账;id 同时记 Number/String 两种形态(两边类型不齐)。 */
+function likedAdd(id) { if (id != null) { likedIds.add(id); likedIds.add(String(id)); likedIds.add(Number(id)); } }
+function likedDel(id) { if (id != null) { likedIds.delete(id); likedIds.delete(String(id)); likedIds.delete(Number(id)); } }
+async function loadLikedIds() {
+  const [plRes, neRes] = await Promise.all([
+    api('/music/playlist').catch(() => ({})),
+    api('/music/netease/likes').catch(() => ({}))
+  ]);
+  if (plRes.ok) (plRes.songs || []).forEach(s => likedAdd(s.songId));
+  if (neRes.ok) (neRes.ids || []).forEach(likedAdd);
+  refreshLikeHearts();
+  if (typeof renderTab === 'function' && (currentTab === 'playlists' || currentTab === 'discover')) renderTab();
+}
+
+async function renderDiscover(container) {
+  container.innerHTML = '<div class="discover-tab"><div class="spinner"></div></div>';
+
+  // 8-31 安可:「Daily Picks 换成每日推荐的位置」——本地土法相似推荐退休,
+  // 正牌 ☁ 网易日推搬进 Discover 常驻(唯一展示位,主页/歌单页的长列表已撤)
+  const [plRes, dailyRes] = await Promise.all([
+    api('/music/playlist').catch(() => ({})),
+    api('/music/netease/daily').catch(() => ({}))
+  ]);
+  if (plRes.ok) (plRes.songs || []).forEach(s => likedAdd(s.songId));   // 九针:并账,不再整本覆盖
+  if (dailyRes.ok) {
+    dailySongs = (dailyRes.songs || []).map(s => ({
+      name: s.name, artist: s.artist, album: s.album, cover: s.cover || '',
+      songId: s.songId || s.id, reason: s.reason || ''
+    }));
+  }
+
+  container.innerHTML = buildDiscoverHTML();
+  bindDiscoverEvents(container);
+}
+
+function buildDiscoverHTML() {
+  let html = `<div class="discover-tab">
+    <div class="discover-top">
+      <div class="discover-title">Discover</div>
+      <div class="search-bar">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" opacity="0.4"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>
+        <input class="search-input" id="search-input" placeholder="search songs or artists..." />
+        <button class="search-clear hidden" id="search-clear"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+        <button class="search-go" id="search-go">Go</button>
+      </div>
+    </div>
+    <!-- 8-31 安可:「没搞懂roam有什么用,压根不看」——漫游药丸退休(引擎兜底留着,想复活翻git) -->
+    <div id="search-results"></div>`;
+
+  // Daily picks (show when no search results)
+  if (dailySongs.length > 0 && searchResults.length === 0) {
+    html += `<div class="section">
+      <div class="section-hd">☁ 今日日推</div>
+      <div class="recent-list" id="daily-list">`;
+    dailySongs.forEach((s, i) => {
+      const liked = likedIds.has(s.songId);
+      html += `
+        <div class="recent-row" data-daily="${i}">
+          ${coverBox(s.cover, 'recent-row-cover')}
+          <div class="recent-row-info">
+            <div class="recent-row-name">${esc(s.name)}</div>
+            <div class="recent-row-artist">${esc(s.artist)}${s.reason ? ` <span class="daily-reason">${esc(s.reason)}</span>` : ''}</div>
+          </div>
+          <button class="like-btn ${liked ? 'liked' : ''}" data-like-daily="${i}">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="${liked ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2">
+              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+            </svg>
+          </button>
+        </div>`;
+    });
+    html += '</div></div>';
+  }
+
+  html += '</div>';
+  return html;
+}
+
+function bindDiscoverEvents(container) {
+  const searchInput = container.querySelector('#search-input');
+  const searchGo = container.querySelector('#search-go');
+  const searchClear = container.querySelector('#search-clear');
+
+  searchGo.addEventListener('click', () => doSearch(searchInput.value));
+  searchInput.addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(searchInput.value); });
+  searchInput.addEventListener('input', () => {
+    searchClear.classList.toggle('hidden', !searchInput.value);
+  });
+  searchClear.addEventListener('click', () => {
+    searchInput.value = '';
+    searchClear.classList.add('hidden');
+    searchResults = [];
+    searchTouched = false;
+    renderTab();
+  });
+
+  // Daily clicks(点一首,日推后面的整列排进播放上下文)
+  container.querySelectorAll('[data-daily]').forEach(row => {
+    row.addEventListener('click', e => {
+      if (e.target.closest('.like-btn')) return;
+      const i = parseInt(row.dataset.daily);
+      playSong(dailySongs[i], dailySongs.slice(i + 1));
+    });
+  });
+  container.querySelectorAll('[data-like-daily]').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const i = parseInt(btn.dataset.likeDaily);
+      likeSong(dailySongs[i]);
+    });
+  });
+}
+
+async function doSearch(q) {
+  if (!q?.trim()) return;
+  const goBtn = document.getElementById('search-go');
+  if (goBtn) goBtn.textContent = '...';
+  searchTouched = true;
+  try {
+    const d = await api('/music/search?q=' + encodeURIComponent(q));
+    searchResults = (d.songs || []).map(t => ({
+      name: t.name, artist: t.artist, album: t.album, cover: t.cover || '', songId: t.id
+    }));
+  } catch { searchResults = []; }
+  renderSearchResults();
+  if (goBtn) goBtn.textContent = 'Go';
+}
+
+function renderSearchResults() {
+  const area = document.getElementById('search-results');
+  if (!area) return;
+  if (searchResults.length === 0) {
+    area.innerHTML = searchTouched ? '<div class="empty-line">没找到这首歌,换个关键词?</div>' : '';
+    return;
+  }
+
+  // Hide daily
+  const dailySection = document.querySelector('#daily-list')?.closest('.section');
+  if (dailySection) dailySection.style.display = 'none';
+
+  let html = '<div class="section"><div class="section-hd en">Search Results</div><div class="song-list">';
+  searchResults.forEach((s, i) => {
+    const liked = likedIds.has(s.songId);
+    html += `
+      <div class="song-row" data-search="${i}">
+        ${coverBox(s.cover, 'song-cover')}
+        <div class="song-info">
+          <div class="song-name">${esc(s.name)}</div>
+          <div class="song-artist">${esc(s.artist)}</div>
+        </div>
+        <button class="like-btn ${liked ? 'liked' : ''}" data-like-search="${i}">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="${liked ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2">
+            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+          </svg>
+        </button>
+        <button class="queue-btn" data-queue="${i}" title="add to queue">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        </button>
+      </div>`;
+  });
+  html += '</div></div>';
+  area.innerHTML = html;
+
+  // Bind
+  area.querySelectorAll('[data-search]').forEach(row => {
+    row.querySelector('.song-cover')?.addEventListener('click', () => {
+      playSong(searchResults[parseInt(row.dataset.search)]);
+    });
+    row.querySelector('.song-info')?.addEventListener('click', () => {
+      playSong(searchResults[parseInt(row.dataset.search)]);
+    });
+  });
+  area.querySelectorAll('[data-like-search]').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const i = parseInt(btn.dataset.likeSearch);
+      likeSong(searchResults[i]);
+    });
+  });
+  area.querySelectorAll('[data-queue]').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const i = parseInt(btn.dataset.queue);
+      addToQueue(searchResults[i]);
+    });
+  });
+}
+
+// 收藏/取消收藏(2026-08-08 安可:「点进去发现不能收藏哥哥的歌」——
+// 以前只有 Discover 和搜索结果的列表里挂了心,正在放的这首反而收藏不了;
+// 小雾递来的歌是直接进播放器的,不经过那两个列表,于是就没处收。
+// 现在播放条和歌词页都挂了心,而且能取消:再点一下就从「喜欢」里拿出来。)
+async function likeSong(s) {
+  if (!s?.songId) return;
+  /* 8-31 安可:「点红心能同步网易云吗！」——同步!写的是她自己的「喜欢的音乐」。
+     旁路异步走,本地红心不等网易;同步失败弹一句,不拦操作。 */
+  const syncNe = (like) => {
+    if (!/^\d+$/.test(String(s.songId))) return;
+    apiPost('/music/netease/like', { songId: String(s.songId), like })
+      .then(r => { if (!r.ok) showToast('网易云那边没同步上'); })
+      .catch(() => {});
+  };
+  if (likedIds.has(s.songId)) {
+    await apiPost('/music/playlist/remove', { songId: s.songId });
+    likedDel(s.songId);
+    syncNe(false);
+    showToast('取消收藏（网易云同步）');
+  } else {
+    await apiPost('/music/playlist/add', { song: s, by: 'user' });
+    likedAdd(s.songId);
+    syncNe(true);
+    showToast('已收藏 ♥（网易云同步）');
+  }
+  refreshLikeHearts();
+  // Re-render discover to update heart icons
+  if (currentTab === 'discover') renderTab();
+}
+// 只把心的填充状态刷一遍,不重建歌词页——重建会把滚动位置和唱到哪一句都弄丢
+function refreshLikeHearts() {
+  const id = state.song && state.song.songId;
+  const on = !!(id && likedIds.has(id));
+  document.querySelectorAll('[data-like-now]').forEach(btn => {
+    btn.classList.toggle('liked', on);
+    const svg = btn.querySelector('svg');
+    if (svg) svg.setAttribute('fill', on ? 'currentColor' : 'none');
+  });
+}
+function heartSvg(on) {
+  return `<svg viewBox="0 0 24 24" width="18" height="18" fill="${on ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.6a5.5 5.5 0 00-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 00-7.8 7.8l1.1 1L12 21l7.7-7.6 1.1-1a5.5 5.5 0 000-7.8z"/></svg>`;
+}
+
+// ── Play Song helper ──
+/* 8-31 八针(安可揪出的架构病:「一切歌单,哥哥点的东西就不见了;点第1首待播499、
+   点第10首变490;插入的歌应该是候选第一才对」)——她说得全对。病根:手动插的歌和
+   「歌单剩余」共用一个 state.queue,后者每次整袋覆盖前者。
+   分家:state.queue=优先队列(只装手动/远程插的歌,永远先播,谁也不许覆盖);
+        state.ctx=播放上下文(当前歌单的后续,切歌单只换它)。
+   随手加播放模式:顺序 order / 单曲循环 one / 随机 shuffle(播放条上一颗钮循环切)。 */
+state.ctx = state.ctx || [];
+let playMode = (() => { try { const v = localStorage.getItem('eryu_play_mode');
+  return ['order', 'one', 'shuffle'].includes(v) ? v : 'order'; } catch { return 'order'; } })();
+function setPlayMode(m) {
+  playMode = m;
+  try { localStorage.setItem('eryu_play_mode', m); } catch {}
+  renderNpBar();
+  showToast({ order: '顺序播放', one: '单曲循环', shuffle: '随机播放' }[m]);
+}
+const MODE_ICONS = {
+  order: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h14"/><path d="M13 6l6 6-6 6"/></svg>',
+  one: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2l4 4-4 4"/><path d="M3 11v-1a4 4 0 014-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v1a4 4 0 01-4 4H3"/><text x="12" y="15" font-size="8" fill="currentColor" stroke="none" text-anchor="middle">1</text></svg>',
+  shuffle: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3h5v5"/><path d="M4 20L21 3"/><path d="M21 16v5h-5"/><path d="M15 15l6 6"/><path d="M4 4l5 5"/></svg>',
+};
+
+function playSong(s, rest) {
+  if (!s) return;
+  if (state.song) state.history.push(state.song);
+  loadAndPlay(s);
+  // rest=这份歌单在这首之后的余下部分 → 只换上下文,不碰优先队列
+  state.ctx = (rest && rest.length > 0) ? rest.slice() : [];
+  renderNpBar();
+}
+
+// ══════════════════════════════════════════
+// ── Now Playing Bar ──
+// ══════════════════════════════════════════
+
+/* 8-31 十针(安可:「抽屉里选歌有概率放不出去+蜜汁播放动画卡顿」)——验尸:
+   renderNpBar 挂在 onAudioChange 上,timeupdate 每秒喂 4~5 次,整条播放条
+   **每秒整块重建 HTML 四五遍**:按钮拆了装装了拆——她手指落下的瞬间按钮正好被换新,
+   点击被吞=「放不出去」;持续重建=动画卡,chat 页 iframe 里双倍放大。
+   修:指纹比对——歌/播放态/队列数/红心/模式都没变就只挪进度条,不动一根 DOM。 */
+let npSig = '';
+function renderNpBar() {
+  const bar = document.getElementById('np-bar');
+  if (!bar) return;
+  const s = state.song;
+  if (!s) { bar.classList.add('hidden'); npSig = ''; return; }
+  bar.classList.remove('hidden');
+
+  const sig = [s.songId, s.name, state.playing, state.queue.length,
+               likedIds.has(s.songId), playMode].join('~');
+  if (sig === npSig) {
+    const fill = bar.querySelector('.np-progress');
+    if (fill) fill.style.width = (state.progress * 100) + '%';
+    return;
+  }
+  npSig = sig;
+
+  bar.innerHTML = `
+    <div class="np-progress" style="width:${(state.progress * 100)}%"></div>
+    ${coverBox(s.cover, 'np-cover')}
+    <div class="np-info">
+      <div class="np-eyebrow" aria-hidden="true">Now playing…</div>
+      <div class="np-name">${esc(s.name)}</div>
+      <div class="np-artist">${esc(s.artist)}</div>
+    </div>
+    <button class="np-queue-btn" id="np-mode-btn" aria-label="播放模式" title="播放模式">${MODE_ICONS[playMode]}</button>
+    ${state.queue.length ? `<button class="np-queue-btn" id="np-queue-btn" aria-label="接下来播">▤ ${state.queue.length}</button>` : ''}
+    ${s.songId ? `<button class="np-like-btn like-btn${likedIds.has(s.songId) ? ' liked' : ''}" id="np-like-btn" data-like-now aria-label="收藏这首">${heartSvg(likedIds.has(s.songId))}</button>` : ''}
+    <button class="np-btn" id="np-play-btn">
+      ${state.playing
+        ? '<svg viewBox="0 0 24 24" width="20" height="20"><rect x="5" y="3" width="5" height="18" rx="1" fill="currentColor"/><rect x="14" y="3" width="5" height="18" rx="1" fill="currentColor"/></svg>'
+        : '<svg viewBox="0 0 24 24" width="20" height="20"><polygon points="5,2 22,12 5,22" fill="currentColor"/></svg>'}
+    </button>
+    <button class="np-next-btn" id="np-next-btn">
+      <svg viewBox="0 0 24 24" width="18" height="18"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z" fill="currentColor"/></svg>
+    </button>`;
+
+  const npLike = document.getElementById('np-like-btn');
+  if (npLike) npLike.addEventListener('click', e => { e.stopPropagation(); likeSong(state.song); });
+  const npQueue = document.getElementById('np-queue-btn');
+  if (npQueue) npQueue.addEventListener('click', e => { e.stopPropagation(); openQueue(); });
+  const npMode = document.getElementById('np-mode-btn');
+  if (npMode) npMode.addEventListener('click', e => {
+    e.stopPropagation();
+    setPlayMode({ order: 'one', one: 'shuffle', shuffle: 'order' }[playMode]);
+  });
+  document.getElementById('np-play-btn').addEventListener('click', e => { e.stopPropagation(); togglePlay(); });
+  document.getElementById('np-next-btn').addEventListener('click', e => { e.stopPropagation(); playNext(); });
+  updatePlayerTitle();
+  syncMediaSession();
+}
+
+// ══════════════════════════════════════════
+// ── Lyrics View ──
+// ══════════════════════════════════════════
+
+let lyricLines = [];
+let lyricTransMap = new Map();
+let currentLyricIdx = -1;
+let lyricsDragging = false;
+let lyricsDragRatio = 0;
+let lyricsLineEls = [];
+let lyricAutoScrollLockedUntil = 0;
+
+function openLyrics() {
+  lyricsOpen = true;
+  const lv = document.getElementById('lyrics-view');
+  if (!lv) return;
+  lv.classList.remove('hidden');
+  renderLyricsView();
+  loadLyrics();
+}
+
+function closeLyrics() {
+  lyricsOpen = false;
+  const lv = document.getElementById('lyrics-view');
+  if (lv) lv.classList.add('hidden');
+}
+
+function renderLyricsView() {
+  const lv = document.getElementById('lyrics-view');
+  if (!lv) return;
+  const s = state.song;
+  if (!s) { closeLyrics(); return; }
+
+  lv.innerHTML = `
+    <div class="ly-header">
+      <button class="ly-close" id="ly-close-btn">&darr;</button>
+      ${s.songId ? `<div class="ly-head-tools">
+        <button class="ly-mem-btn ly-like-btn${likedIds.has(s.songId) ? ' liked' : ''}" id="ly-like-btn" data-like-now aria-label="收藏这首">${heartSvg(likedIds.has(s.songId))}</button>
+        <button class="ly-mem-btn" id="ly-mem-btn" aria-label="歌的批注"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg></button>
+        <button class="ly-mem-btn" id="ly-cmt-btn" aria-label="刷评论"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5c0 4.1-3.8 7.5-8.5 7.5-1.2 0-2.4-.2-3.4-.6L4 20l1.3-3.4C4.5 15.3 4 13.5 4 11.5 4 7.4 7.8 4 12.5 4S21 7.4 21 11.5z"/></svg></button>
+        <button class="ly-mem-btn" id="ly-mv-btn" aria-label="看MV"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2.5"/><polygon points="10,9 16,12 10,15" fill="currentColor" stroke="none"/></svg></button>
+        <button class="ly-mem-btn" id="ly-addlist-btn" aria-label="加入歌单"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h13M3 12h13M3 18h7"/><path d="M18 15v6M15 18h6"/></svg></button>      </div>` : ''}
+    </div>
+    <!-- 8-18 安可拍板「转转转一般般」:黑胶唱片退休,换参考图式玻璃大头卡(方封面+NOW PLAYING 眉题)。
+         syncDiscSpin 还在但查无此盘,自然空转;想复活唱片去 git 捞 8-10 的版本。 -->
+    <div class="ly-cover-area">
+      <div class="ly-card">
+        ${coverBox(s.cover, 'ly-cover-sq')}
+        <div class="ly-song-info">
+          <div class="ly-eyebrow">NOW PLAYING</div>
+          <div class="ly-song-name">${esc(s.name)}</div>
+          <div class="ly-song-artist">${esc(s.artist)}</div>
+        </div>
+      </div>
+    </div>
+    <div class="ly-lines" id="ly-lines-container">
+      <div class="ly-loading">loading lyrics...</div>
+    </div>
+    <!-- 8-31 偷师果果家(Cheiineeey/netease-music-mcp):播放器内直聊——
+         长按选句后这条小输入浮上来,想说的话就地写,寄出去不用离开歌词页 -->
+    <div class="ly-chatline" id="ly-chatline" hidden>
+      <div class="ly-chatline-quote" id="ly-chatline-quote"></div>
+      <div class="ly-chatline-row">
+        <input class="ly-chatline-input" id="ly-chatline-input" placeholder="想对这句说的话…(可留空)">
+        <button class="ly-chatline-send" id="ly-chatline-send">递过去</button>
+        <button class="ly-chatline-close" id="ly-chatline-close" aria-label="收起">✕</button>
+      </div>
+    </div>
+    <!-- 8-18 二稿(安可:「没有我们家的味道,占地方好大」):两行并一行的胶囊甲板,
+         进度条滑块是兔兔本兔——歌走到哪它站到哪,拖歌等于拽兔子跑 -->
+    <div class="ly-deck">
+      <button class="ly-skip-btn" id="ly-prev"><svg viewBox="0 0 24 24" width="18" height="18"><path d="M6 6h2v12H6zm12 0v12l-8.5-6z" fill="currentColor"/></svg></button>
+      <button class="ly-play-btn" id="ly-play">
+        ${state.playing
+          ? '<svg viewBox="0 0 24 24" width="17" height="17"><rect x="5" y="3" width="5" height="18" rx="1" fill="currentColor"/><rect x="14" y="3" width="5" height="18" rx="1" fill="currentColor"/></svg>'
+          : '<svg viewBox="0 0 24 24" width="17" height="17"><polygon points="5,2 22,12 5,22" fill="currentColor"/></svg>'}
+      </button>
+      <button class="ly-skip-btn" id="ly-next"><svg viewBox="0 0 24 24" width="18" height="18"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z" fill="currentColor"/></svg></button>
+      <div class="ly-seek" id="ly-seek">
+        <div class="ly-seek-track">
+          <div class="ly-seek-fill" id="ly-seek-fill" style="width:${(state.progress * 100)}%"></div>
+        </div>
+        <div class="ly-seek-thumb" id="ly-seek-thumb" style="left:${(state.progress * 100)}%"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><g fill="currentColor"><ellipse cx="8.5" cy="7" rx="2.7" ry="6.2" transform="rotate(-16 8.5 7)"/><ellipse cx="15.5" cy="7" rx="2.7" ry="6.2" transform="rotate(16 15.5 7)"/><circle cx="12" cy="15" r="7"/></g></svg></div>
+      </div>
+      <div class="ly-time-combo"><span id="ly-time-current">${fmt(state.currentTime)}</span><i>/</i><span id="ly-time-total">${fmt(state.duration)}</span></div>
+    </div>`;
+
+  // Bind events
+  document.getElementById('ly-close-btn').addEventListener('click', closeLyrics);
+  document.getElementById('ly-play').addEventListener('click', togglePlay);
+  document.getElementById('ly-prev').addEventListener('click', playPrev);
+  document.getElementById('ly-next').addEventListener('click', playNext);
+
+  const memBtn = document.getElementById('ly-mem-btn');
+  if (memBtn) memBtn.addEventListener('click', () => openMemory(s.songId));
+  const cmtBtn = document.getElementById('ly-cmt-btn');
+  if (cmtBtn) cmtBtn.addEventListener('click', () => openComments(s));
+  const mvBtn = document.getElementById('ly-mv-btn');
+  if (mvBtn) mvBtn.addEventListener('click', () => openMv(s));
+  const addBtn = document.getElementById('ly-addlist-btn');
+  if (addBtn) addBtn.addEventListener('click', () => openAddToList(s));  const lyLike = document.getElementById('ly-like-btn');
+  if (lyLike) lyLike.addEventListener('click', () => likeSong(state.song));
+
+  // Seek bar events
+  bindSeekBar();
+}
+
+function bindSeekBar() {
+  const seekEl = document.getElementById('ly-seek');
+  if (!seekEl) return;
+
+  const getPos = (clientX) => {
+    const rect = seekEl.getBoundingClientRect();
+    return Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+  };
+
+  const onStart = (clientX) => {
+    lyricsDragging = true;
+    lyricsDragRatio = getPos(clientX);
+    updateSeekUI(lyricsDragRatio);
+  };
+
+  const onMove = (clientX) => {
+    if (!lyricsDragging) return;
+    lyricsDragRatio = getPos(clientX);
+    updateSeekUI(lyricsDragRatio);
+  };
+
+  const onEnd = () => {
+    if (!lyricsDragging) return;
+    lyricsDragging = false;
+    if (state.duration) {
+      audio.currentTime = lyricsDragRatio * state.duration;
+    }
+  };
+
+  // One pointer stream works for mouse, pen, and touch, without leaking window listeners
+  // every time the lyrics view is rendered.
+  seekEl.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    seekEl.setPointerCapture?.(e.pointerId);
+    onStart(e.clientX);
+  });
+  seekEl.addEventListener('pointermove', e => onMove(e.clientX));
+  seekEl.addEventListener('pointerup', onEnd);
+  seekEl.addEventListener('pointercancel', onEnd);
+}
+
+function updateSeekUI(ratio) {
+  const fill = document.getElementById('ly-seek-fill');
+  const thumb = document.getElementById('ly-seek-thumb');
+  const timeCur = document.getElementById('ly-time-current');
+  if (fill) fill.style.width = (ratio * 100) + '%';
+  if (thumb) thumb.style.left = (ratio * 100) + '%';
+  if (timeCur && state.duration) timeCur.textContent = fmt(ratio * state.duration);
+}
+
+/* 8-31 七针(安可:「切歌的时候太卡了」):换歌时两个 onSongChange 监听各拉一次歌词、
+   各画一遍整页列表=全部翻倍。加按歌缓存:同一首只请求+解析一次,重复调用只重画;
+   连续切歌时旧请求作废(songId 校验),不会把上一首的词画到下一首头上。 */
+const lyricFetchCache = new Map();
+async function loadLyrics() {
+  const s = state.song;
+  if (!s?.songId) return;
+  const sid = String(s.songId);
+
+  lyricLines = [];
+  lyricTransMap = new Map();
+  currentLyricIdx = -1;
+
+  let entry = lyricFetchCache.get(sid);
+  if (!entry) {
+    try {
+      const d = await api('/music/lyric?id=' + sid);
+      entry = { lines: [], trans: new Map() };
+      if (d.ok && d.lrc) entry.lines = parseLrc(d.lrc);
+      if (d.tlyric) {
+        for (const tl of parseLrc(d.tlyric)) entry.trans.set(Math.round(tl.time * 100), tl.text);
+      }
+      lyricFetchCache.set(sid, entry);
+      if (lyricFetchCache.size > 40) lyricFetchCache.delete(lyricFetchCache.keys().next().value);
+    } catch { entry = { lines: [], trans: new Map() }; }
+  }
+  if (String(state.song?.songId) !== sid) return;   // 等待期间又切歌了,这趟作废
+  lyricLines = entry.lines;
+  lyricTransMap = entry.trans;
+
+  renderLyricLines();
+}
+
+/* 8-31「文字PV」动效搬进歌词页(安可:「不如不要独立舞台,只把歌词动效搬过去」,
+   概念借鉴 folia-major,代码是自家的):当前句逐字错峰点亮,唱过就恢复整句。 */
+function charSpans(text, base = 0) {
+  // 8-31 四针(安可:「每次开头都要卡一下」):字符 span 改成**装台时预拆**——
+  // 旧版每次换句现场 innerHTML 重建+回流+一口气起 30 个动画,句头必卡。
+  // 现在渲染歌词列表时就拆好,激活只翻 class,零重建。延迟写在 --d 变量里,
+  // 只有 .active 时动画才引用它。词包字(.ly-w):英文单词不从中间拆行。
+  let i = 0, out = '';
+  for (const seg of String(text).split(/(\s+)/)) {
+    if (!seg) continue;
+    if (/^\s+$/.test(seg)) { out += esc(seg); continue; }
+    out += '<span class="ly-w">' + Array.from(seg).map(ch =>
+      `<span class="ly-ch" style="--d:${base + Math.min(i++ * 22, 500)}ms">${esc(ch)}</span>`).join('') + '</span>';
+  }
+  return out;
+}
+
+function renderLyricLines() {
+  const container = document.getElementById('ly-lines-container');
+  if (!container) return;
+
+  if (lyricLines.length === 0) {
+    container.innerHTML = '<div class="ly-no-lyrics">no lyrics available</div>';
+    lyricsLineEls = [];
+    return;
+  }
+
+  let html = '';
+  lyricLines.forEach((l, i) => {
+    const trans = lyricTransMap.get(Math.round(l.time * 100));
+    html += `<div class="ly-line" data-line="${i}" data-time="${l.time}"><span class="ly-text">${esc(l.text)}</span>${trans ? '<div class="ly-trans">' + esc(trans) + '</div>' : ''}</div>`;
+  });
+  container.innerHTML = html;
+  lyricsLineEls = container.querySelectorAll('.ly-line');
+
+  // 她一上手就让位：4 秒内不自动跟，正在滑的也立刻松手（不然会跟她抢滚动条）
+  const pauseAutoScroll = () => {
+    lyricAutoScrollLockedUntil = performance.now() + 4000;
+    stopLyricGlide();
+  };
+  container.addEventListener('wheel', pauseAutoScroll, { passive: true });
+  container.addEventListener('touchmove', pauseAutoScroll, { passive: true });
+
+  // Click to seek;长按=把这句寄给聊天草稿(8-31 安可「自选歌词发送」)
+  lyricsLineEls.forEach(el => {
+    let lpTimer = 0, lpFired = false;
+    const lpStart = () => {
+      lpFired = false;
+      lpTimer = window.setTimeout(() => {
+        lpFired = true;
+        const i = parseInt(el.dataset.line);
+        if (!isNaN(i)) openLyricChat(i);
+      }, 550);
+    };
+    const lpCancel = () => window.clearTimeout(lpTimer);
+    el.addEventListener('touchstart', lpStart, { passive: true });
+    el.addEventListener('touchmove', lpCancel, { passive: true });
+    el.addEventListener('touchend', lpCancel, { passive: true });
+    el.addEventListener('mousedown', lpStart);
+    el.addEventListener('mousemove', lpCancel);
+    el.addEventListener('mouseup', lpCancel);
+    el.addEventListener('mouseleave', lpCancel);
+    el.addEventListener('contextmenu', e => e.preventDefault());   // 原生菜单全程谢客,长按只归分享
+    el.addEventListener('click', () => {
+      if (lpFired) { lpFired = false; return; }   // 长按抬手别顺手 seek
+      const time = parseFloat(el.dataset.time);
+      if (!isNaN(time)) audio.currentTime = time;
+    });
+  });
+}
+
+/* ── 歌词惯性滚动（Lenis 的路子）──
+   原来用 container.scrollTo({behavior:'smooth'})，曲线是浏览器给的、各家不一样、
+   而且一旦排队就会突兀地跳。这里自己插值：每帧朝目标补上剩余距离的一小截，
+   越接近越慢 —— 这就是 Lenis 的 lerp，damso 用的是 .12，照抄。
+
+   lerp 直接乘会跟帧率绑死（120Hz 屏上快一倍），所以按 dt 归一化到 60fps。 */
+const LYRIC_LERP = 0.12;
+let lyricGlideRAF = 0;
+let lyricGlideTarget = 0;
+let lyricGlideLast = 0;
+
+function glideLyricsTo(container, top) {
+  const max = Math.max(0, container.scrollHeight - container.clientHeight);
+  lyricGlideTarget = Math.max(0, Math.min(top, max));
+  if (lyricGlideRAF) return;                       // 已经在滑了，改目标就行
+  lyricGlideLast = performance.now();
+  const step = now => {
+    const dt = Math.min(now - lyricGlideLast, 50); // 切后台回来别一帧跳完
+    lyricGlideLast = now;
+    const cur = container.scrollTop;
+    const diff = lyricGlideTarget - cur;
+    if (Math.abs(diff) < 0.5) {
+      container.scrollTop = lyricGlideTarget;
+      lyricGlideRAF = 0;
+      return;
+    }
+    const t = 1 - Math.pow(1 - LYRIC_LERP, dt / 16.667);
+    container.scrollTop = cur + diff * t;
+    lyricGlideRAF = requestAnimationFrame(step);
+  };
+  lyricGlideRAF = requestAnimationFrame(step);
+}
+
+function stopLyricGlide() {
+  if (lyricGlideRAF) { cancelAnimationFrame(lyricGlideRAF); lyricGlideRAF = 0; }
+}
+
+/* 读一个元素当前的旋转角度（从合成后的矩阵反解），用来接着转 / 惯性停。 */
+function currentRotation(el) {
+  const t = getComputedStyle(el).transform;
+  if (!t || t === 'none') return 0;
+  const m = new DOMMatrixReadOnly(t);
+  return Math.atan2(m.b, m.a) * 180 / Math.PI;
+}
+
+/* 唱片起转 / 停转。停转不是急停 —— 断电的唱盘会靠惯性再飘一段才停。 */
+function syncDiscSpin() {
+  const disc = document.getElementById('ly-disc');
+  if (!disc) return;
+  const spinning = disc.classList.contains('spinning');
+  if (state.playing === spinning) return;              // 状态没变，别打断正在转的动画
+
+  const deg = currentRotation(disc);
+  if (state.playing) {
+    disc.style.transition = 'none';
+    disc.style.transform = '';
+    disc.style.setProperty('--spin-from', deg + 'deg');  // 从停下的角度接着转，不回弹到 0
+    disc.classList.add('spinning');
+  } else {
+    disc.classList.remove('spinning');                 // 脱离 animation，改由 transition 接管
+    disc.style.transition = 'none';
+    disc.style.transform = `rotate(${deg}deg)`;
+    void disc.offsetWidth;                             // 定住这一帧，否则下面那句会被合并掉
+    disc.style.transition = `transform var(--t-slow) var(--ease-out)`;
+    disc.style.transform = `rotate(${deg + 22}deg)`;    // 再飘 22° 慢慢停
+  }
+}
+
+function renderLyricsProgress() {
+  if (!lyricsOpen) return;
+
+  // Update play button
+  const playBtn = document.getElementById('ly-play');
+  if (playBtn) {
+    playBtn.innerHTML = state.playing
+      ? '<svg viewBox="0 0 24 24" width="17" height="17"><rect x="5" y="3" width="5" height="18" rx="1" fill="currentColor"/><rect x="14" y="3" width="5" height="18" rx="1" fill="currentColor"/></svg>'
+      : '<svg viewBox="0 0 24 24" width="17" height="17"><polygon points="5,2 22,12 5,22" fill="currentColor"/></svg>';
+  }
+  syncDiscSpin();
+
+  // Update seek bar (only if not dragging)
+  if (!lyricsDragging) {
+    updateSeekUI(state.progress);
+  }
+  const timeTotal = document.getElementById('ly-time-total');
+  if (timeTotal) timeTotal.textContent = fmt(state.duration);
+
+  // Update current lyric highlight
+  if (lyricLines.length > 0) {
+    // 8-31 安可实测「大概 0.3s 延迟」:入场动画有显影时间,时钟提前 0.3s 点亮对冲——
+    // 唱到那句时字已经站定,卡拉OK的老规矩
+    const LYRIC_LEAD = 0.3;
+    let idx = -1;
+    for (let i = lyricLines.length - 1; i >= 0; i--) {
+      if (state.currentTime + LYRIC_LEAD >= lyricLines[i].time) { idx = i; break; }
+    }
+    if (idx !== currentLyricIdx) {
+      currentLyricIdx = idx;
+      // 文字PV动效:六针版(安可:「切歌的时候卡卡的」)——四针的整首预拆把 900 个 span
+      // 的装台成本压在了切歌瞬间。改**首次点亮才拆字,拆一次终身保留**:
+      // 切歌=纯文本秒开,每句第一次轮到时拆 20 来个 span(便宜),之后永远只翻 class。
+      lyricsLineEls.forEach((el, i) => {
+        const on = i === idx;
+        if (on && !el.dataset.ch) {
+          el.dataset.ch = '1';
+          const t = el.querySelector('.ly-text');
+          if (t) t.innerHTML = charSpans(t.textContent);
+          const tr = el.querySelector('.ly-trans');
+          if (tr) tr.innerHTML = charSpans(tr.textContent, 140);
+        }
+        el.classList.toggle('active', on);
+      });
+      // Auto-scroll
+      if (idx >= 0 && lyricsLineEls[idx] && performance.now() >= lyricAutoScrollLockedUntil) {
+        const container = document.getElementById('ly-lines-container');
+        const el = lyricsLineEls[idx];
+        if (container) {
+          glideLyricsTo(container,
+            el.offsetTop - container.clientHeight / 2 + el.clientHeight / 2);
+        }
+      }
+    }
+  }
+}
+
+// ══════════════════════════════════════════
+// ── Song Memory Panel ──
+// ══════════════════════════════════════════
+
+/* 8-31 兔牙家 remake：批注改成手写的。
+   上游把面板锁在「先跑频谱分析」后面（librosa 没装，等于从出生就锁死），
+   而且只读不写。现在：随时打开、直接写、点保存落进 music_memory.json。 */
+function openMemory(songId) {
+  memoryOpen = true;
+  const mv = document.getElementById('memory-view');
+  if (!mv) return;
+  mv.classList.remove('hidden');
+  mv.innerHTML = '<div class="sm-header"><button class="sm-close" id="sm-close-btn">&times;</button><span class="sm-header-title">歌的批注</span></div><div class="sm-body"><div class="sm-loading">翻批注本…</div></div>';
+  document.getElementById('sm-close-btn').addEventListener('click', closeMemory);
+  loadMemory(songId);
+}
+
+function closeMemory() {
+  memoryOpen = false;
+  const mv = document.getElementById('memory-view');
+  if (mv) mv.classList.add('hidden');
+}
+
+async function loadMemory(songId) {
+  const mv = document.getElementById('memory-view');
+  if (!mv) return;
+  try {
+    const d = await api('/music/memory?id=' + songId);
+    renderMemory(mv, d.memory || {}, songId);
+  } catch {
+    mv.querySelector('.sm-body').innerHTML = '<div class="sm-empty">批注本没翻开，等会儿再点一下</div>';
+  }
+}
+
+function renderMemory(mv, mem, songId) {
+  const fmtDate = (iso) => {
+    if (!iso) return '';
+    const d = new Date(iso);
+    return (d.getMonth() + 1) + '/' + d.getDate();
+  };
+
+  /* 8-31 六针(安可:「哥哥的备注我在批注页面看不到,批注页面就一个输入框」):
+     旧版把已有批注塞在 textarea 里当可编辑文本——视觉上等于隐身。
+     改成「先读后写」:已有批注/喜欢的句子/标签摆出来给人读,
+     输入框永远是空的「再记一笔」,保存＝追加,历史永远在上面看得见。 */
+  let body = '';
+  if (mem.feeling) body += `<div class="sm-feeling">${esc(mem.feeling)}</div>`;
+  if (mem.notes) body += `<div class="sm-notes">${esc(mem.notes)}</div>`;
+  if (mem.favoriteLines && mem.favoriteLines.length > 0) {
+    body += '<div class="sm-fav-title">♪ 分享过的句子</div><div class="sm-fav-lines">';
+    mem.favoriteLines.forEach(l => { body += `<div class="sm-fav-line">${esc(l)}</div>`; });
+    body += '</div>';
+  }
+  if (mem.tags && mem.tags.length > 0) {
+    body += '<div class="sm-tags">';
+    mem.tags.forEach(t => { body += `<span class="sm-tag">${esc(t)}</span>`; });
+    body += '</div>';
+  }
+  if (!mem.notes && !(mem.favoriteLines || []).length && !mem.feeling) {
+    body += '<div class="sm-empty" style="padding:24px 0">这首还没有批注——写下第一笔吧</div>';
+  }
+  body += `<textarea class="sm-edit" id="sm-notes-edit" rows="3" placeholder="再记一笔——听到它的场景、想到的人、随便一句话。保存后会接在上面，不覆盖。"></textarea>`;
+  body += `<input class="sm-edit sm-edit-tags" id="sm-tags-edit" placeholder="标签（空格隔开，比如：深夜 兔牙家 单曲循环）" value="${esc((mem.tags || []).join(' '))}">`;
+  body += '<button class="sm-save" id="sm-save-btn">收进批注本</button>';
+  body += '<div class="sm-meta">';
+  if (mem.listenCount > 0) body += `<span>听过 ${mem.listenCount} 次</span>`;
+  if (mem.togetherCount > 0) body += `<span>一起听完 ${mem.togetherCount} 次</span>`;
+  if (mem.bpm) body += `<span>${mem.bpm} BPM</span>`;
+  if (mem.firstListened) body += `<span>初遇 ${fmtDate(mem.firstListened)}</span>`;
+  if (mem.notedBy) body += `<span>上次批注：${mem.notedBy === 'fog' ? '小雾' : '安可'} ${fmtDate(mem.notedAt)}</span>`;
+  body += '</div>';
+
+  mv.innerHTML = `
+    <div class="sm-header">
+      <button class="sm-close" id="sm-close-btn">&times;</button>
+      <span class="sm-header-title">歌的批注</span>
+      <button class="sm-refresh" id="sm-refresh-btn">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+      </button>
+    </div>
+    <div class="sm-body">${body}</div>`;
+
+  document.getElementById('sm-close-btn').addEventListener('click', closeMemory);
+  document.getElementById('sm-refresh-btn').addEventListener('click', () => loadMemory(songId));
+  document.getElementById('sm-save-btn').addEventListener('click', async () => {
+    const btn = document.getElementById('sm-save-btn');
+    const fresh = document.getElementById('sm-notes-edit').value.trim();
+    btn.disabled = true; btn.textContent = '收…';
+    try {
+      await apiPost('/music/memory', {
+        songId,
+        action: 'note',
+        // 追加不覆盖:输入框只装新一笔,接在旧批注后面(六针,和小雾 -m 同一个哲学)
+        notes: [mem.notes || '', fresh].filter(Boolean).join('\n'),
+        tags: document.getElementById('sm-tags-edit').value.split(/\s+/).filter(Boolean),
+        name: state.song?.name || mem.name || '',
+        artist: state.song?.artist || mem.artist || '',
+        by: 'anko',
+      });
+      showToast('批注收好了');
+      loadMemory(songId);
+    } catch {
+      showToast('没存上，再试一次');
+      btn.disabled = false; btn.textContent = '收进批注本';
+    }
+  });
+}
+
+/* ── 歌曲评论区（8-31 remake，安可点单「想在小手机里面刷歌曲评论」）──
+   后端 /music/comments 走她自己的网易云 cookie；首页带热评，往下翻是最新。 */
+let commentsOpen = false;
+let cmtOffset = 0;
+
+function openComments(song) {
+  if (!song || !song.songId) return;
+  commentsOpen = true;
+  cmtOffset = 0;
+  const cv = document.getElementById('comments-view');
+  if (!cv) return;
+  cv.classList.remove('hidden');
+  cv.innerHTML = `
+    <div class="sm-header">
+      <button class="sm-close" id="cm-close-btn">&times;</button>
+      <span class="sm-header-title">${esc(song.name)} 的评论区</span>
+    </div>
+    <div class="sm-body" id="cm-body"><div class="sm-loading">评论在路上…</div></div>`;
+  document.getElementById('cm-close-btn').addEventListener('click', closeComments);
+  loadComments(song.songId, true);
+}
+
+function closeComments() {
+  commentsOpen = false;
+  const cv = document.getElementById('comments-view');
+  if (cv) cv.classList.add('hidden');
+}
+
+function cmtCard(c, hot) {
+  const d = c.time ? new Date(c.time) : null;
+  const when = d ? `${d.getFullYear()}.${d.getMonth() + 1}.${d.getDate()}` : '';
+  // 网易给的头像是 http 链接,https 页面下会被拦成混合内容——升成 https(它家 CDN 支持)
+  const ava = (c.avatar || '').replace(/^http:/, 'https:');
+  return `<div class="cm-item${hot ? ' hot' : ''}">
+    <div class="cm-head">${ava ? `<img class="cm-ava" src="${esc(ava)}?param=60y60" loading="lazy" alt="">` : ''}<span class="cm-user">${esc(c.user)}</span>${hot ? '<span class="cm-hot-tag">热评</span>' : ''}</div>
+    <div class="cm-text">${esc(c.content)}</div>
+    <div class="cm-foot"><span>♥ ${c.liked || 0}</span><span>${when}</span></div>
+  </div>`;
+}
+
+async function loadComments(songId, first) {
+  const bodyEl = document.getElementById('cm-body');
+  if (!bodyEl) return;
+  try {
+    const d = await api(`/music/comments?id=${songId}&offset=${cmtOffset}&limit=20`);
+    let html = '';
+    if (first && d.hot && d.hot.length) {
+      html += d.hot.map(c => cmtCard(c, true)).join('');
+      html += '<div class="cm-divider">最新评论</div>';
+    }
+    html += (d.comments || []).map(c => cmtCard(c, false)).join('');
+    if (first) bodyEl.innerHTML = html || '<div class="sm-empty">这首还没人留言</div>';
+    else {
+      const more = document.getElementById('cm-more'); if (more) more.remove();
+      bodyEl.insertAdjacentHTML('beforeend', html);
+    }
+    cmtOffset += (d.comments || []).length;
+    if (d.more) {
+      bodyEl.insertAdjacentHTML('beforeend', '<button class="sm-save cm-more" id="cm-more">再翻一页</button>');
+      document.getElementById('cm-more').addEventListener('click', () => {
+        document.getElementById('cm-more').textContent = '翻…';
+        loadComments(songId, false);
+      });
+    }
+  } catch {
+    if (first) bodyEl.innerHTML = '<div class="sm-empty">评论暂时取不到（网易那边没应门）</div>';
+  }
+}
+
+
+// ══════════════════════════════════════════
+// ── Song change => update lyrics view ──
+// ══════════════════════════════════════════
+onSongChange(() => {
+  if (lyricsOpen) {
+    renderLyricsView();
+    // loadLyrics 不在这儿叫了(七针):1688 行的全局 onSongChange 已经在拉,
+    // 这里再叫一次=歌词双倍下载双倍整页重画,正是「切歌太卡」的另一半病根。
+    // renderLyricsView 只搭壳,歌词列表由那边的 loadLyrics 灌进来。
+  }
+});
+
+// ── 「接下来播」队列面板(8-31 安可:「没有排队等候的播放清单,看不到 rime 酱点的歌去了哪里」——
+//    state.queue 原来是个看不见的口袋,现在播放条挂「▤ N」小牌,点开能看能删能插队 ──
+function openQueue() {
+  const qv = document.getElementById('queue-view');
+  if (!qv) return;
+  qv.classList.remove('hidden');
+  renderQueue();
+}
+function closeQueue() {
+  const qv = document.getElementById('queue-view');
+  if (qv) qv.classList.add('hidden');
+}
+function renderQueue() {
+  const qv = document.getElementById('queue-view');
+  if (!qv || qv.classList.contains('hidden')) return;
+  const rows = state.queue.map((s, i) => `
+    <div class="qv-item" data-i="${i}">
+      ${coverBox(s.cover, 'qv-cover')}
+      <div class="qv-info"><b>${esc(s.name || '')}</b><small>${esc(s.artist || '')}</small></div>
+      <button class="qv-now" data-now="${i}">先播这首</button>
+      <button class="qv-del" data-del="${i}" aria-label="移除">✕</button>
+    </div>`).join('');
+  qv.innerHTML = `
+    <div class="sm-header">
+      <button class="sm-close" id="qv-close">&times;</button>
+      <span class="sm-header-title">接下来播 · ${state.queue.length} 首</span>
+    </div>
+    <div class="sm-body">${rows || '<div class="sm-empty">队列空空,点歌或让小雾 -P 一首</div>'}</div>`;
+  document.getElementById('qv-close').addEventListener('click', closeQueue);
+  qv.querySelectorAll('[data-now]').forEach(btn => btn.addEventListener('click', () => {
+    const i = Number(btn.dataset.now);
+    const song = state.queue.splice(i, 1)[0];
+    if (song) loadAndPlay(song);
+    renderQueue(); renderNpBar();
+  }));
+  qv.querySelectorAll('[data-del]').forEach(btn => btn.addEventListener('click', () => {
+    state.queue.splice(Number(btn.dataset.del), 1);
+    renderQueue(); renderNpBar();
+  }));
+}
+
+// ── 加入歌单(8-31 晚,安可:「家里没有添加歌曲到xx列表的功能,红心之后全部列表都会有了」——
+//    她都建好「rime推荐」空等着了。歌词页 ➕ 钮:当前这首→选一个本地歌单→收进去。 ──
+function openAddToList(song) {
+  if (!song || !song.songId) return;
+  const av = document.getElementById('addlist-view');
+  if (!av) return;
+  av.classList.remove('hidden');
+  av.innerHTML = `
+    <div class="sm-header">
+      <button class="sm-close" id="al-close">&times;</button>
+      <span class="sm-header-title">把《${esc(song.name)}》收进…</span>
+    </div>
+    <div class="sm-body" id="al-body"><div class="sm-loading">翻歌单架…</div></div>`;
+  document.getElementById('al-close').addEventListener('click', closeAddToList);
+  api('/music/playlists').then(d => {
+    const body = document.getElementById('al-body');
+    if (!body) return;
+    const pls = (d.ok ? d.playlists : []) || [];
+    if (!pls.length) { body.innerHTML = '<div class="sm-empty">还没有歌单——去歌单页右上角 + 建一个</div>'; return; }
+    body.innerHTML = pls.map((pl, i) => `
+      <div class="qv-item" data-al="${i}">
+        <div class="qv-cover">${pl.cover ? `<img src="${esc(pl.cover)}" alt="">` : '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:var(--muted)">♪</div>'}</div>
+        <div class="qv-info"><b>${esc(pl.name)}</b><small>${pl.count || 0} songs</small></div>
+        <button class="qv-now" data-alpick="${i}">收进去</button>
+      </div>`).join('');
+    body.querySelectorAll('[data-alpick]').forEach(btn => btn.addEventListener('click', async () => {
+      const pl = pls[parseInt(btn.dataset.alpick)];
+      btn.disabled = true; btn.textContent = '收…';
+      try {
+        const r = await apiPost('/music/playlists/add-song', { playlistId: pl.id, song: { ...song }, by: 'user' });
+        if (r.duplicate) { showToast(`已经在『${pl.name}』里啦`); btn.textContent = '已在单里'; }
+        else { showToast(`已收进『${pl.name}』♪`); btn.textContent = '收好了 ✓'; }
+      } catch { showToast('没收进去,再试一次'); btn.disabled = false; btn.textContent = '收进去'; }
+    }));
+  }).catch(() => {
+    const body = document.getElementById('al-body');
+    if (body) body.innerHTML = '<div class="sm-empty">歌单架没翻开,再点一次</div>';
+  });
+}
+function closeAddToList() {
+  const av = document.getElementById('addlist-view');
+  if (av) { av.classList.add('hidden'); av.innerHTML = ''; }
+}
+
+// ── MV(8-31 晚,安可:「我们的音乐还没有接入mv功能呢！」)──
+//    歌词页 🎬 钮 → /music/mv 查片源 → 全屏放;开MV时暂停音乐,关掉接着放。
+let mvWasPlaying = false;
+
+async function openMv(song) {
+  if (!song || !song.songId) return;
+  const btn = document.getElementById('ly-mv-btn');
+  if (btn) btn.disabled = true;
+  let d;
+  try { d = await api('/music/mv?id=' + song.songId); }
+  catch { showToast('MV 查询失败'); if (btn) btn.disabled = false; return; }
+  if (btn) btn.disabled = false;
+  if (!d.ok) { showToast(d.msg || '这首没有MV'); return; }
+  const mv = document.getElementById('mv-view');
+  if (!mv) return;
+  mvWasPlaying = state.playing;
+  audio.pause();
+  const quals = Object.keys(d.urls || {}).sort((a, b) => b - a);
+  mv.classList.remove('hidden');
+  mv.innerHTML = `
+    <div class="mv-top">
+      <button class="sm-close" id="mv-close">&times;</button>
+      <span class="mv-title">${esc(d.name || song.name)}<small>${esc(d.artist || song.artist || '')}</small></span>
+      ${quals.length > 1 ? `<select class="mv-qual" id="mv-qual">${quals.map(q => `<option value="${q}">${q}P</option>`).join('')}</select>` : ''}
+    </div>
+    <video id="mv-video" src="${esc(d.url)}" controls autoplay playsinline referrerpolicy="no-referrer"></video>`;
+  document.getElementById('mv-close').addEventListener('click', closeMv);
+  const qsel = document.getElementById('mv-qual');
+  if (qsel) qsel.addEventListener('change', () => {
+    const v = document.getElementById('mv-video');
+    const t = v.currentTime;
+    v.src = d.urls[qsel.value]; v.currentTime = t; v.play().catch(() => {});
+  });
+}
+
+function closeMv() {
+  const mv = document.getElementById('mv-view');
+  if (!mv || mv.classList.contains('hidden')) return;
+  const v = document.getElementById('mv-video');
+  if (v) { v.pause(); v.removeAttribute('src'); v.load(); }
+  mv.classList.add('hidden');
+  mv.innerHTML = '';
+  if (mvWasPlaying) audio.play().catch(() => {});
+}
+
+// ── 远程点播接线(8-31 安可:「听说原来有哥哥直接插歌进列表的功能,怎么没有啦」——
+//    /music/remote 后端一直在,客户端皮从没接过这条线。现在:5 秒一问,有歌就接。
+//    正在放歌 → 排进队列;闲着 → 直接开播。小雾那头用 `diange -P` 插歌。 ──
+setInterval(async () => {
+  try {
+    const d = await api('/music/remote');
+    if (!d.ok || !d.songs) return;
+    for (const raw of d.songs) {
+      const song = { name: raw.name || '', artist: raw.artist || '', album: raw.album || '',
+                     cover: raw.cover || '', songId: raw.songId || raw.id };
+      if (!song.songId) continue;
+      if (raw.mode === 'now' || !(state.song && (state.playing || state.queue.length))) {
+        // diange --now 或播放器闲着:立刻开播
+        showToast(`小雾点了「${song.name}」,现在就放~`);
+        loadAndPlay(song);
+      } else {
+        state.queue.push(song);
+        showToast(`小雾插了「${song.name}」进队列,点 ▤ 看`);
+      }
+    }
+    renderNpBar(); renderQueue();
+  } catch {}
+}, 5000);
+
+// ── Init ──
+setupMediaSession();
+loadLikedIds();   // 九针:红心账本开机就装(本地+网易云合账),不再等逛 Discover
+init();
+</script>
+
+<!-- ══ 播放时冒小贴纸(2026-08-21 安可点单,参考 Design Spells #284「Queue」)══
+     参考里的机制:小图标从播放键胶囊背后往上冒,浮一点点,淡出。一次一两个,不规律。
+     我们家换成安可画的水彩小件。纯加法:不动 .np-bar 一行,贴纸挂在 body 上用 fixed
+     定位,每次生成时读一次 np-bar 的位置,所以 mini / embedded / 全屏三种活法都不用管。
+     不要了:把这段 <style> 和 <script> 整块删掉即可。 ══ -->
+<style>
+.np-sticker{
+  position: fixed;
+  z-index: 60;
+  width: 26px; height: 26px;
+  pointer-events: none;
+  background-position: center;
+  background-size: contain;
+  background-repeat: no-repeat;
+  opacity: 0;
+  will-change: transform, opacity;
+  filter: drop-shadow(0 2px 5px rgba(176,120,150,.28));
+  animation: np-sticker-float 2.3s cubic-bezier(.22,.7,.3,1) forwards;
+}
+@keyframes np-sticker-float{
+  0%   { opacity: 0; transform: translate(-50%, 10px) scale(.55) rotate(var(--rot0)); }
+  18%  { opacity: 1; transform: translate(-50%, -6px) scale(1.06) rotate(0deg); }
+  32%  { opacity: 1; transform: translate(-50%, -16px) scale(1)   rotate(var(--rot1)); }
+  100% { opacity: 0; transform: translate(-50%, -62px) scale(.92) rotate(var(--rot1)); }
+}
+@media (prefers-reduced-motion: reduce){ .np-sticker{ display: none; } }
+</style>
+<script>
+(function(){
+  "use strict";
+  var DECOR = "/chat/assets/decor/";
+  var PACK = ["think-bow-v1","bow-heart-v1","bunny-v1","fog-cat-v1",
+              "drop-lollipop-v1","ferret-v1","plum-branch-v1"];
+  var MIN_GAP = 2600, MAX_GAP = 5200;   // 冒一枚之后歇多久
+  var timer = null, last = -1;
+
+  function pick(){                       // 别连着两次同一张
+    var i = Math.floor(Math.random() * PACK.length);
+    if (i === last) i = (i + 1) % PACK.length;
+    last = i;
+    return PACK[i];
+  }
+
+  function pop(){
+    var bar = document.getElementById("np-bar");
+    if (!bar || bar.classList.contains("hidden") || document.hidden) return;
+    var r = bar.getBoundingClientRect();
+    if (!r.width) return;
+
+    var el = document.createElement("div");
+    el.className = "np-sticker";
+    el.style.backgroundImage = "url('" + DECOR + pick() + ".webp')";
+    // 横向落在播放条中段偏随机，别每次都从同一个点冒
+    el.style.left = Math.round(r.left + r.width * (0.30 + Math.random() * 0.42)) + "px";
+    el.style.top  = Math.round(r.top - 6) + "px";
+    var a = (Math.random() * 26 - 13).toFixed(1);
+    var b = (Math.random() * 20 - 10).toFixed(1);
+    el.style.setProperty("--rot0", a + "deg");
+    el.style.setProperty("--rot1", b + "deg");
+    el.addEventListener("animationend", function(){ el.remove(); });
+    document.body.appendChild(el);
+  }
+
+  function schedule(){
+    stop();
+    timer = setTimeout(function(){
+      pop();
+      schedule();
+    }, MIN_GAP + Math.random() * (MAX_GAP - MIN_GAP));
+  }
+  function stop(){ if (timer){ clearTimeout(timer); timer = null; } }
+
+  function wire(){
+    // audio 是这份文件里的全局单例；拿不到就退回监听文档上的任何 <audio>
+    var a = (typeof audio !== "undefined") ? audio : document.querySelector("audio");
+    if (!a){ setTimeout(wire, 1200); return; }
+    a.addEventListener("play",  schedule);
+    a.addEventListener("pause", stop);
+    a.addEventListener("ended", stop);
+    document.addEventListener("visibilitychange", function(){
+      if (document.hidden) stop();
+      else if (!a.paused) schedule();
+    });
+    if (!a.paused) schedule();
+  }
+
+  if (document.readyState === "loading")
+    document.addEventListener("DOMContentLoaded", wire);
+  else wire();
+})();
+</script>
+</body>
+</html>
