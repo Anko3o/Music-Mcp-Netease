@@ -1440,9 +1440,21 @@ audio.addEventListener('timeupdate', () => {
 });
 audio.addEventListener('play', () => { state.playing = true; notify(); postSongToParent(); });
 audio.addEventListener('pause', () => { state.playing = false; notify(); postSongToParent(); });
+
+/* 听歌记账上报(9-01 安可:「和哥哥听了五个小时都没计数!」):
+   听完/切歌时把本次实际播放秒数写回网易云,听歌量和年度报告才认这里的账。
+   30 秒以下不记,跟官方口径一致;失败静默,不打扰听歌。 */
+function scrobbleToNetease(end) {
+  const s = state.song;
+  const t = Math.floor(audio.currentTime || 0);
+  if (!s || !s.songId || t < 30) return;
+  apiPost('/music/netease/scrobble', { songId: s.songId, seconds: t, end }).catch(() => {});
+}
+
 audio.addEventListener('ended', () => {
   state.playing = false;
   notify();
+  scrobbleToNetease('playend');
   if (state.song) {
     apiPost('/music/listen-complete', {
       songId: state.song.songId,
@@ -1462,6 +1474,9 @@ let loadSeq = 0;   // stale-guard: when songs are tapped in quick succession, la
 async function loadAndPlay(song) {
   if (!song || !song.songId) return;
   const my = ++loadSeq;
+  if (state.song && String(state.song.songId) !== String(song.songId)) {
+    scrobbleToNetease('ui');               // 换歌前给上一首记账
+  }
   state.song = song;
   notifySong();
   // Listen counting: POST /music/recent/add on every play.

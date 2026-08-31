@@ -354,6 +354,23 @@ def t_her_recent(args):
     return "\n".join(out)
 
 
+
+def t_her_record(args):
+    week = bool(args.get("week"))
+    limit = min(50, max(1, int(args.get("limit") or 15)))
+    d = music_get("/music/netease/record", type=1 if week else 0)
+    if not d.get("ok"):
+        return "❌ 听歌排行拉取失败"
+    songs = d.get("songs") or []
+    if not songs:
+        return "排行还是空的。"
+    out = [("对方最近一周的听歌排行" if week else "对方的听歌总排行") + f"(前 {min(limit, len(songs))}):"]
+    for i, s in enumerate(songs[:limit], 1):
+        pc = s.get("playCount")
+        out.append(f"{i}. {s['name']} — {s['artist']}  ·{pc}次  (song_id {s['songId']})")
+    return "\n".join(out)
+
+
 def t_song_comments(args):
     song = resolve_song(args)
     limit = min(30, max(1, int(args.get("limit") or 10)))
@@ -470,6 +487,11 @@ TOOLS = [
      "description": "看对方最近在播放器里听了什么（新→旧，带播放时间和累计次数）。感知此刻的心情、挑歌回应时用。",
      "inputSchema": {"type": "object", "properties": {
          "limit": {"type": "integer", "description": "看几首，默认 10，最多 30"}}}},
+    {"name": "her_record",
+     "description": "看对方在网易云的听歌排行(单曲累计次数,只读)。week=true 看最近一周,默认总榜。挑歌回赠前摸口味用。",
+     "inputSchema": {"type": "object", "properties": {
+         "week": {"type": "boolean", "description": "true=最近一周,默认总榜"},
+         "limit": {"type": "integer", "description": "看几首,默认 15,最多 50"}}}},
     {"name": "song_comments",
      "description": "刷一首歌的网易云评论区（热评＋最新）。想引热评聊歌、看大家怎么说时用。",
      "inputSchema": {"type": "object", "properties": {
@@ -494,7 +516,7 @@ TOOLS = [
 HANDLERS = {"song_search": t_song_search, "song_share": t_song_share,
             "lyric_share": t_lyric_share, "song_memo": t_song_memo,
             "her_likes": t_her_likes, "memo_read": t_memo_read,
-            "her_recent": t_her_recent, "song_comments": t_song_comments,
+            "her_recent": t_her_recent, "her_record": t_her_record, "song_comments": t_song_comments,
             "playlists": t_playlists, "playlist_add": t_playlist_add}
 
 

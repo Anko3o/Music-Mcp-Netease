@@ -398,6 +398,8 @@ class MusicHandler(BaseHTTPRequestHandler):
             self._handle_netease_daily()
         elif path == "/music/netease/likes":
             self._handle_netease_likes_get()
+        elif path == "/music/netease/record":
+            self._handle_netease_record()
         elif path == "/music/playlist":
             self._handle_music_playlist_get()
         elif path == "/music/playlists":
@@ -451,6 +453,8 @@ class MusicHandler(BaseHTTPRequestHandler):
             self._handle_music_recent_add(body)
         elif path == "/music/netease/like":
             self._handle_netease_like(body)
+        elif path == "/music/netease/scrobble":
+            self._handle_netease_scrobble(body)
         elif path == "/music/memory":
             self._handle_music_memory_save(body)
         elif path == "/music/analyze":
@@ -1061,6 +1065,65 @@ class MusicHandler(BaseHTTPRequestHandler):
         ok = r.get("code") == 200
         self._send_json(200, {"ok": ok, "code": r.get("code"),
                               "msg": "" if ok else str(r.get("message") or r.get("msg") or "")})
+
+
+    def _handle_netease_scrobble(self, body: dict):
+        """听歌记账上报（9-01 安可:「和哥哥听了五个小时都没计数!」）:
+        把一次播放写回网易云官方客户端同款的 weblog 口,听歌量/年度时长才吃得到这里的播放。
+        end='playend' 自然听完,'ui' 中途切歌——都按实际播放秒数记。"""
+        song_id = str(body.get("songId") or "")
+        try:
+            seconds = max(0, int(body.get("seconds") or 0))
+        except (TypeError, ValueError):
+            seconds = 0
+        end = body.get("end") if body.get("end") in ("playend", "ui") else "playend"
+        if not song_id.isdigit() or seconds <= 0:
+            self._send_json(400, {"error": "missing songId/seconds"})
+            return
+        logs = json.dumps([{"action": "play", "json": {
+            "download": 0, "end": end, "id": int(song_id),
+            "sourceId": str(body.get("sourceId") or ""),
+            "time": seconds, "type": "song", "wifi": 0, "source": "list",
+            "mainsite": 1, "content": ""}}])
+        form = urlencode({"logs": logs}).encode()
+        try:
+            r = self._netease_request("https://music.163.com/api/feedback/weblog", data=form)
+        except Exception:
+            self._send_json(502, {"error": "网易那边没应门"})
+            return
+        ok = r.get("code") == 200
+        self._send_json(200, {"ok": ok, "code": r.get("code")})
+
+
+    def _handle_netease_record(self):
+        """听歌排行拉取(9-01 安可:「听歌次数是不是也能拉取!」):
+        网易云的单曲累计播放榜,type=0 总榜 / 1 最近一周。只读。"""
+        qs = parse_qs(urlparse(self.path).query)
+        rtype = 1 if qs.get("type", ["0"])[0] == "1" else 0
+        try:
+            acc = self._netease_request("https://music.163.com/api/nuser/account/get")
+            uid = (acc.get("profile") or {}).get("userId")
+            if not uid:
+                self._send_json(502, {"error": "拿不到账号 uid"})
+                return
+            d = self._netease_request(
+                f"https://music.163.com/api/v1/play/record?uid={uid}&type={rtype}")
+        except Exception:
+            self._send_json(502, {"error": "听歌排行拉取失败"})
+            return
+        key = "weekData" if rtype == 1 else "allData"
+        out = []
+        for row in (d.get(key) or []):
+            song = row.get("song") or {}
+            al = song.get("al") or {}
+            out.append({
+                "songId": song.get("id"), "name": song.get("name", ""),
+                "artist": ", ".join(a.get("name", "") for a in (song.get("ar") or []) if a.get("name")),
+                "album": al.get("name", ""),
+                "cover": str(al.get("picUrl") or "").replace("http://", "https://", 1),
+                "playCount": row.get("playCount", 0), "score": row.get("score", 0),
+            })
+        self._send_json(200, {"ok": True, "type": rtype, "songs": out})
 
     # ── Song memory system ──
 
