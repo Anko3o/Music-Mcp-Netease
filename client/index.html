@@ -1198,7 +1198,7 @@ button:active,
 
 <script>
 /* ═══════════════════════════════════════════
-   eryu — standalone vanilla JS music player
+   music — standalone vanilla JS music player
    ═══════════════════════════════════════════ */
 
 // 版本号供主页识别已经打开的旧播放器；避免 named window 永远复用旧 JS。
@@ -1215,10 +1215,10 @@ window.TUTOOTH_MUSIC_VERSION = '2026-08-10.1';
    ——所以抽屉不是「等比缩小」，是「按场景裁功能」：她在抽屉里是来听的，不是来逛的。
 
    实测抽屉 620px、iframe 只有 561px，比独立窗矮三分之一；更要命的是双层顶栏——
-   抽屉自己有一条（歌名/聊这句/分享/收起），播放器又顶一条（←/eryu/⤢），
+   抽屉自己有一条（歌名/聊这句/分享/收起），播放器又顶一条（←/music/⤢），
    两条一起吃掉 112px。而播放器这条在抽屉里三个键全是废的：
      ← 返回   iframe 里返回没有意义，父页有「收起」
-     eryu     抽屉头已经在显示歌名，重复
+     music    抽屉头已经在显示歌名，重复
      ⤢ 迷你窗 缩窗是父页的事，iframe 里 resizeTo 根本无效
    撤掉顶栏省 52px、导航瘦身省 18px，都还给内容区。 */
 const isEmbedded = (() => {
@@ -1292,7 +1292,7 @@ function notifySong() { state.songListeners.forEach(fn => fn(state.song)); postS
 /* ── Broadcast current song to parent page ──
    聊天页把播放器嵌成 iframe 抽屉,靠这条 postMessage 知道现在在放什么,
       Same-origin, but still uses an explicit targetOrigin instead of '*'.
-   父页也可以主动喊一声 {type:'eryu:ask'},这边立刻回一条当前状态。 */
+   父页也可以主动喊一声 {type:'music:ask'},这边立刻回一条当前状态。 */
 function songSnapshot() {
   const s = state.song;
   if (!s) return null;
@@ -1304,7 +1304,7 @@ function songSnapshot() {
 function postSongToParent() {
   if (window.parent === window) return;      // 独立标签打开时没人要听,省了
   try {
-    window.parent.postMessage({ type: 'eryu:song', song: songSnapshot() }, location.origin);
+    window.parent.postMessage({ type: 'music:song', song: songSnapshot() }, location.origin);
   } catch {}
 }
 /* ── Report the currently-sung lyric line to the parent page ──
@@ -1339,7 +1339,7 @@ async function postLyricNow() {
     return { time: l.time, text: l.text, trans: snap.trans.get(Math.round(l.time * 100)) || '' };
   };
   const payload = {
-    type: 'eryu:lyric',
+    type: 'music:lyric',
     song: songSnapshot(),
     at,
     prev: pick(idx - 1),
@@ -1352,7 +1352,7 @@ async function postLyricNow() {
 
 /* Long-press any lyric line to share it (with surrounding lines + translation):
    长按选句不再跑回聊天页——歌词页里浮出小输入条,想说的话就地写,「递过去」直接寄出
-   (eryu:lyric-send → 聊天端立发,带她的话和整包歌词)。 */
+   (music:lyric-send → 聊天端立发,带她的话和整包歌词)。 */
 let lyChatIdx = -1;
 function lyricPick(j) {
   const l = lyricLines[j];
@@ -1381,7 +1381,7 @@ function sendLyricChat() {
   if (lyChatIdx < 0 || !lyricLines[lyChatIdx]) return;
   const note = (document.getElementById('ly-chatline-input')?.value || '').trim();
   const payload = {
-    type: 'eryu:lyric-send', song: songSnapshot(), at: lyricLines[lyChatIdx].time,
+    type: 'music:lyric-send', song: songSnapshot(), at: lyricLines[lyChatIdx].time,
     prev: lyricPick(lyChatIdx - 1), line: lyricPick(lyChatIdx), next: lyricPick(lyChatIdx + 1),
     note, hasLyric: true,
   };
@@ -1400,11 +1400,11 @@ document.addEventListener('keydown', (e) => {
 window.addEventListener('message', (ev) => {
   if (ev.origin !== location.origin) return;
   const d = ev.data || {};
-  if (d.type === 'eryu:ask') postSongToParent();
-  if (d.type === 'eryu:lyric-now') postLyricNow();
+  if (d.type === 'music:ask') postSongToParent();
+  if (d.type === 'music:lyric-now') postLyricNow();
   // 聊天页的歌曲卡片点「一起听」时打过来:直接放这首(2026-08-08)
-  if (d.type === 'eryu:play' && d.song && d.song.songId) {
-    // Clickable lyric cards: jump straight to the shared line (seek time rides on eryu:play).
+  if (d.type === 'music:play' && d.song && d.song.songId) {
+    // Clickable lyric cards: jump straight to the shared line (seek time rides on music:play).
     // The embedding page may send the same play command twice (iframe-ready double-shout);
     // 旧版每喊必重载=第二喊把歌拽回 0:00。现在**同曲免重载**:台上已是这首就不换碟,
     // 只在唱针离目标 3 秒开外才挪针——双喊、重复点卡都不再打断。
@@ -1446,7 +1446,7 @@ audio.addEventListener('timeupdate', () => {
       lastTickPost = now;
       try {
         window.parent.postMessage({
-          type: 'eryu:tick', at: state.currentTime,
+          type: 'music:tick', at: state.currentTime,
           duration: state.duration, playing: state.playing,
         }, location.origin);
       } catch {}
@@ -1679,9 +1679,9 @@ document.addEventListener('visibilitychange', () => {
    只在手机/没有桌面小窗能力的场景接管;桌面弹窗本来就有自己的关窗逻辑,不掺和。 */
 function installBackGuard() {
   if (window.matchMedia('(pointer: fine)').matches && window.opener && !window.opener.closed) return;
-  try { history.pushState({ eryuGuard: 1 }, ''); } catch { return; }
+  try { history.pushState({ musicGuard: 1 }, ''); } catch { return; }
   window.addEventListener('popstate', () => {
-    try { history.pushState({ eryuGuard: 1 }, ''); } catch {}
+    try { history.pushState({ musicGuard: 1 }, ''); } catch {}
     if (state.playing || state.song) {
       // 走和左上角「回家」按钮完全同一条路:先让原生 target 去切主页标签,
       // 切不过去再弹提示。直接调函数是不够的——anchor 的 target 只认真实点击。
@@ -2599,11 +2599,11 @@ function heartSvg(on) {
         state.ctx=播放上下文(当前歌单的后续,切歌单只换它)。
    随手加播放模式:顺序 order / 单曲循环 one / 随机 shuffle(播放条上一颗钮循环切)。 */
 state.ctx = state.ctx || [];
-let playMode = (() => { try { const v = localStorage.getItem('eryu_play_mode');
+let playMode = (() => { try { const v = localStorage.getItem('music_play_mode');
   return ['order', 'one', 'shuffle'].includes(v) ? v : 'order'; } catch { return 'order'; } })();
 function setPlayMode(m) {
   playMode = m;
-  try { localStorage.setItem('eryu_play_mode', m); } catch {}
+  try { localStorage.setItem('music_play_mode', m); } catch {}
   renderNpBar();
   showToast({ order: '顺序播放', one: '单曲循环', shuffle: '随机播放' }[m]);
 }

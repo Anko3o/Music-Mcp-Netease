@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""eryu — standalone music server for Netease Cloud Music.
+"""music — standalone music server for Netease Cloud Music.
 
 Zero external dependencies (Python stdlib only). Handles:
   - Song search, audio URL resolution with CDN fallback, audio streaming
@@ -18,8 +18,8 @@ Zero external dependencies (Python stdlib only). Handles:
   - Static file serving for cached mp3s and frontend
 
 Usage:
-    python3 server/eryu.py                     # port 9090
-    PORT=8080 python3 server/eryu.py           # custom port
+    python3 server/music.py                     # port 9090
+    PORT=8080 python3 server/music.py           # custom port
 
 Data layout:
     ./data/music_cache/    — cached mp3, lrc, tlyric, analysis files
@@ -58,7 +58,7 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
 )
-logger = logging.getLogger("eryu")
+logger = logging.getLogger("music")
 
 
 # ── Secret management ────────────────────────────────────────────────────────
@@ -82,10 +82,10 @@ def _load_or_create_secret() -> str:
 
 # ── Request handler ──────────────────────────────────────────────────────────
 
-class EryuHandler(BaseHTTPRequestHandler):
+class MusicHandler(BaseHTTPRequestHandler):
     state: "ServerState"
 
-    server_version = "Eryu/1.0"
+    server_version = "Music/1.1"
 
     def log_message(self, fmt, *args):
         # Local change (privacy): this is a single-user player; no need to audit searches.
@@ -110,10 +110,10 @@ class EryuHandler(BaseHTTPRequestHandler):
 
     def _check_auth(self) -> bool:
         # Deployment note: public requests pass site-wide basic_auth first; the reverse proxy
-        # 后端只监听 loopback；同时校验来源地址和标记，避免浏览器保存第二枚 Eryu token。
+        # 后端只监听 loopback；同时校验来源地址和标记，避免浏览器保存第二枚 music token。
         if (
             self.client_address[0] in {"127.0.0.1", "::1"}
-            and self.headers.get("X-Eryu-Gateway", "") == os.environ.get("ERYU_GATEWAY_TOKEN", "eryu-gateway")
+            and self.headers.get("X-Music-Gateway", "") == os.environ.get("MUSIC_GATEWAY_TOKEN", "music-gateway")
         ):
             return True
         if not self.state.shared_secret:
@@ -353,7 +353,7 @@ class EryuHandler(BaseHTTPRequestHandler):
 
         # Health check (no auth)
         if path == "/health":
-            self._send_json(200, {"ok": True, "version": "1.0", "service": "eryu"})
+            self._send_json(200, {"ok": True, "version": "1.0", "service": "music"})
             return
 
         # Static: cached music files.
@@ -773,7 +773,7 @@ class EryuHandler(BaseHTTPRequestHandler):
         data = self._load_music_data()
         for pl in data["playlists"]:
             if pl["id"] == pid:
-                if any(s.get("songId") == song["songId"] for s in pl["songs"]):
+                if any(str(s.get("songId")) == str(song["songId"]) for s in pl["songs"]):
                     self._send_json(200, {"ok": True, "duplicate": True})
                     return
                 song["addedBy"] = body.get("by", "unknown")
@@ -1506,10 +1506,10 @@ class ServerState:
 def main():
     port = int(os.environ.get("PORT", "9090"))
     state = ServerState(port)
-    EryuHandler.state = state
+    MusicHandler.state = state
 
-    server = ThreadingHTTPServer((state.host, state.port), EryuHandler)
-    logger.info("eryu starting on %s:%d", state.host, state.port)
+    server = ThreadingHTTPServer((state.host, state.port), MusicHandler)
+    logger.info("music starting on %s:%d", state.host, state.port)
     logger.info("Data dir: %s", state.data_dir)
     if state.shared_secret:
         logger.info("Auth token: %s", state.shared_secret[:8] + "...")
