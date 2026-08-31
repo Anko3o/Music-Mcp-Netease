@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>chat-demo · 一起听对接示范</title>
+<style>
+  /* 配色沿用播放器的奶油粉,一眼看出是一家的 */
+  :root {
+    --bg: #fdf4f2; --milk: rgba(255,255,255,.72); --line: rgba(194,112,138,.18);
+    --rose: #c2708a; --rose-deep: #984e68; --ink: #5c4a50;
+    --shadow: 0 6px 24px rgba(194,112,138,.14);
+  }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font: 15px/1.6 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    display: flex; flex-direction: column;
+  }
+
+  /* ── 顶栏 + 一起听药丸 ── */
+  .topbar {
+    display: flex; align-items: center; gap: 10px; padding: 10px 14px;
+    background: var(--milk); border-bottom: 1px solid var(--line);
+    backdrop-filter: blur(10px);
+  }
+  .topbar h1 { font-size: 16px; color: var(--rose-deep); font-weight: 600; flex: 1; }
+  /* 药丸:播放器每秒 music:tick 喂进度,不自己起计时器,永远和真实播放对齐 */
+  #pill {
+    display: none; align-items: center; gap: 8px; max-width: 220px;
+    padding: 5px 12px 5px 6px; border-radius: 999px; cursor: pointer;
+    background: rgba(194,112,138,.12); border: 1px solid var(--line);
+  }
+  #pill.on { display: flex; }
+  #pill img { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; }
+  #pill .meta { min-width: 0; }
+  #pill .name { font-size: 12px; font-weight: 600; color: var(--rose-deep);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 120px; }
+  #pill .bar { height: 3px; border-radius: 2px; background: rgba(194,112,138,.2); margin-top: 3px; overflow: hidden; }
+  #pill .bar i { display: block; height: 100%; width: 0; background: var(--rose); transition: width .5s linear; }
+  #pill .time { font-size: 11px; color: var(--rose); font-variant-numeric: tabular-nums; }
+
+  /* ── 消息区 ── */
+  #msgs { flex: 1; overflow-y: auto; padding: 16px 14px 90px; }
+  .msg { max-width: 78%; margin-bottom: 12px; padding: 9px 13px; border-radius: 16px;
+    background: var(--milk); border: 1px solid var(--line); box-shadow: var(--shadow);
+    white-space: pre-wrap; word-break: break-word; }
+  .msg.me { margin-left: auto; background: rgba(194,112,138,.14); border-color: transparent; }
+  .msg .who { font-size: 11px; color: var(--rose); margin-bottom: 2px; }
+
+  /* 歌曲卡/歌词卡:聊天里的「一起听」入口
+     (white-space 要收回 normal,不然 .msg 的 pre-wrap 会把模板缩进渲染成大片空白) */
+  .songcard, .lyriccard { white-space: normal; }
+  .songcard { display: flex; gap: 10px; align-items: center; padding: 10px; width: 260px; }
+  .songcard img { width: 46px; height: 46px; border-radius: 10px; object-fit: cover; }
+  .songcard .t { flex: 1; min-width: 0; }
+  .songcard .n { font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .songcard .a { font-size: 12px; color: var(--rose); }
+  .songcard button, .lyriccard button {
+    border: 0; border-radius: 999px; padding: 6px 12px; font-size: 12px;
+    background: var(--rose); color: #fff; cursor: pointer; flex-shrink: 0;
+  }
+  .lyriccard { width: 270px; padding: 12px 14px; }
+  .lyriccard .quote { border-left: 3px solid var(--rose); padding-left: 10px; margin: 6px 0 10px;
+    font-size: 13px; color: var(--rose-deep); font-style: italic; }
+  .lyriccard .at { font-size: 11px; color: var(--rose); font-variant-numeric: tabular-nums; }
+
+  /* ── 输入条 ── */
+  .composer { position: fixed; left: 0; right: 0; bottom: 0; display: flex; gap: 8px;
+    padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
+    background: var(--milk); border-top: 1px solid var(--line); backdrop-filter: blur(10px); }
+  .composer input { flex: 1; border: 1px solid var(--line); border-radius: 999px;
+    padding: 9px 16px; font-size: 14px; background: #fff; color: var(--ink); outline: none; }
+  .composer button { border: 0; border-radius: 999px; width: 40px; height: 40px;
+    font-size: 17px; background: var(--rose); color: #fff; cursor: pointer; }
+  .composer #drawerBtn { background: rgba(194,112,138,.16); color: var(--rose-deep); }
+
+  /* ── 一起听抽屉:iframe 里就是播放器本体 ── */
+  #drawer { position: fixed; left: 0; right: 0; bottom: 0; height: 62vh; z-index: 30;
+    background: var(--bg); border-radius: 22px 22px 0 0; box-shadow: 0 -10px 40px rgba(194,112,138,.25);
+    transform: translateY(105%); transition: transform .32s cubic-bezier(.22,.9,.28,1);
+    display: flex; flex-direction: column; overflow: hidden; }
+  #drawer.open { transform: translateY(0); }
+  #drawer .grip { padding: 8px 0 4px; text-align: center; cursor: pointer; flex-shrink: 0; }
+  #drawer .grip i { display: inline-block; width: 40px; height: 4px; border-radius: 2px; background: rgba(194,112,138,.35); }
+  #drawer iframe { border: 0; width: 100%; flex: 1; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>chat-demo</h1>
+  <!-- 一起听药丸:点一下展开抽屉 -->
+  <div id="pill" title="正在一起听 · 点开抽屉">
+    <img id="pillCover" alt="">
+    <div class="meta">
+      <div class="name" id="pillName"></div>
+      <div class="bar"><i id="pillBar"></i></div>
+    </div>
+    <div class="time" id="pillTime">00:00</div>
+  </div>
+</div>
+
+<div id="msgs"></div>
+
+<div class="composer">
+  <button id="drawerBtn" title="一起听">♪</button>
+  <input id="input" placeholder="说点什么…（歌词卡会以草稿落进这里）">
+  <button id="sendBtn">↑</button>
+</div>
+
+<div id="drawer">
+  <div class="grip" id="drawerGrip"><i></i></div>
+  <iframe id="player" title="music player"></iframe>
+</div>
+
+<script>
+/* ══════════════════════════════════════════════════════════════
+   chat-demo —— 「一起听」对接示范（本仓库 music 播放器的宿主端最小实现）
+
+   ⚠️ 前提:本页必须和播放器同源(播放器 postMessage 的目标是 location.origin,
+   跨域一律静默丢弃)。部署方式见旁边的 README.md。
+
+   协议一览(双向,全部走 postMessage):
+   播放器 → 宿主:
+     music:song        {song:{songId,name,artist,album,cover,playing}}  换歌/应答 ask
+     music:tick        {at,duration,playing}                            每秒一次的进度心跳
+     music:lyric       {hasLyric,at,prev,line,next,song}                应答 lyric-now(带前后句+翻译)
+     music:lyric-send  {song,at,prev,line,next,note}                    播放器内直聊:她在歌词页写完直接递出
+   宿主 → 播放器:
+     music:ask         {}                                               要一份当前状态
+     music:play        {song:{songId,name,artist,album,cover}, at?}     播这首;at=跳到第几秒(歌词卡点击用)
+     music:lyric-now   {}                                               要当前唱到的那句(做「聊这句」)
+   ══════════════════════════════════════════════════════════════ */
+
+// 播放器地址:默认同源 /music/,也可 ?player=/xxx/ 覆盖
+const PLAYER_URL = new URLSearchParams(location.search).get('player') || '/music/';
+const PLAYER_ORIGIN = new URL(PLAYER_URL, location.href).origin;
+
+const $ = id => document.getElementById(id);
+const frame = $('player');
+frame.src = PLAYER_URL;
+
+function postToPlayer(msg) {
+  try { frame.contentWindow.postMessage(msg, PLAYER_ORIGIN); } catch {}
+}
+
+// ── 抽屉 ──
+const drawer = $('drawer');
+const openDrawer = () => { drawer.classList.add('open'); postToPlayer({ type: 'music:ask' }); };
+const closeDrawer = () => drawer.classList.remove('open');
+$('drawerBtn').onclick = () => drawer.classList.contains('open') ? closeDrawer() : openDrawer();
+$('drawerGrip').onclick = closeDrawer;
+$('pill').onclick = openDrawer;
+
+// ── 药丸 ──
+let nowSong = null;
+const mmss = t => `${String(Math.floor(t/60)).padStart(2,'0')}:${String(Math.floor(t%60)).padStart(2,'0')}`;
+function renderPill(at, dur) {
+  const pill = $('pill');
+  if (!nowSong) { pill.classList.remove('on'); return; }
+  pill.classList.add('on');
+  $('pillCover').src = nowSong.cover || '';
+  $('pillName').textContent = nowSong.name || '';
+  if (dur > 0) $('pillBar').style.width = (at / dur * 100).toFixed(1) + '%';
+  $('pillTime').textContent = mmss(at || 0);
+}
+
+// ── 消息区 ──
+const msgs = $('msgs');
+function addMsg(html, me, who) {
+  const el = document.createElement('div');
+  el.className = 'msg' + (me ? ' me' : '');
+  el.innerHTML = (who ? `<div class="who">${who}</div>` : '') + html;
+  msgs.appendChild(el);
+  msgs.scrollTop = msgs.scrollHeight;
+  return el;
+}
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+// 歌曲卡:点「一起听」→ 开抽屉 + music:play
+function addSongCard(song, me, who) {
+  const el = addMsg(`<div class="songcard">
+      <img src="${esc(song.cover)}" alt="">
+      <div class="t"><div class="n">${esc(song.name)}</div><div class="a">${esc(song.artist)}</div></div>
+      <button>一起听 ▶</button>
+    </div>`, me, who);
+  el.querySelector('button').onclick = () => { openDrawer(); postToPlayer({ type: 'music:play', song }); };
+}
+
+// 歌词卡:点「跳进这句」→ music:play 捎上 at 秒数,播放器落针到那一句
+function addLyricCard(song, line, at, note, me, who) {
+  const el = addMsg(`<div class="lyriccard">
+      <div class="at">🎧 ${esc(song.name)} · ${mmss(at)}</div>
+      <div class="quote">${esc(line.text)}${line.trans ? `<br><small>${esc(line.trans)}</small>` : ''}</div>
+      ${note ? `<div>${esc(note)}</div>` : ''}
+      <button>跳进这句去听 ▶</button>
+    </div>`, me, who);
+  el.querySelector('button').onclick = () => { openDrawer(); postToPlayer({ type: 'music:play', song, at }); };
+}
+
+// ── 收播放器的信 ──
+let lastAt = 0, lastDur = 0;
+window.addEventListener('message', e => {
+  if (e.origin !== PLAYER_ORIGIN) return;      // 只认播放器
+  const d = e.data || {};
+  if (d.type === 'music:song') {
+    nowSong = d.song || null;
+    renderPill(lastAt, lastDur);
+  }
+  if (d.type === 'music:tick') {
+    lastAt = Number(d.at) || 0; lastDur = Number(d.duration) || 0;
+    renderPill(lastAt, lastDur);
+  }
+  // 播放器内直聊:她在歌词页长按选句、写完一句话直接递过来
+  if (d.type === 'music:lyric-send' && d.line) {
+    addLyricCard(d.song || nowSong || {}, d.line, Number(d.at) || 0, d.note || '', false, '对方(从歌词页)');
+  }
+  // 「聊这句」应答:整包歌词落进输入框当草稿,补完自己的话再发
+  if (d.type === 'music:lyric' && d.hasLyric && d.line) {
+    $('input').value = `🎧 ${mmss(d.at)} 唱到:「${d.line.text}」 `;
+    $('input').focus();
+  }
+});
+
+// ── 发送(本地示范,真实接入换成你家的消息通道) ──
+function send() {
+  const v = $('input').value.trim();
+  if (!v) return;
+  addMsg(esc(v), true);
+  $('input').value = '';
+}
+$('sendBtn').onclick = send;
+$('input').addEventListener('keydown', e => { if (e.key === 'Enter') send(); });
+
+// ── 开场示范消息 ──
+addMsg('这是 chat-demo:右下角 ♪ 开「一起听」抽屉,里面就是播放器本体。\n播放器一开始放歌,顶栏会长出进度药丸。', false, 'demo');
+addSongCard({ songId: '1428153831', name: '夜行', artist: 'ヨルシカ',
+  cover: 'https://p1.music.126.net/NcyGrm4pxBOMDHTHfdG_2A==/109951164769180658.jpg' }, false, '对方');
+addLyricCard({ songId: '1428153831', name: '夜行', artist: 'ヨルシカ' },
+  { text: '君は忘れてしまうだろうけど思い出だけが本当なんだ', trans: '或许你早已忘却,但唯有回忆才是真实的啊' },
+  100, '听到这句想起你', false, '对方');
+</script>
+</body>
+</html>
