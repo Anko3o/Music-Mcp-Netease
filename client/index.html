@@ -2918,25 +2918,36 @@ function renderLyricLines() {
   container.addEventListener('wheel', pauseAutoScroll, { passive: true });
   container.addEventListener('touchmove', pauseAutoScroll, { passive: true });
 
-  // Click to seek;长按=把这句寄给聊天草稿(8-31 安可「自选歌词发送」)
+  // Click to seek;长按=选句分享(8-31)。
+  // 收尾针三连(安可:「取消长按复制之后,长按分享也不行了」):验尸——其实她手机上
+  // 我们的长按从来没赢过:任何 touchmove/mousemove 都直接取消计时,而手指按住必有微抖,
+  // 550ms 永远数不满(之前被原生菜单盖着看不出来)。修:取消挂**位移阈值**,挪 >10px 才算想滑动。
   lyricsLineEls.forEach(el => {
-    let lpTimer = 0, lpFired = false;
-    const lpStart = () => {
+    let lpTimer = 0, lpFired = false, lpX = 0, lpY = 0;
+    const pt = (e) => e.touches && e.touches[0] ? e.touches[0] : e;
+    const lpStart = (e) => {
       lpFired = false;
+      const p = pt(e); lpX = p.clientX; lpY = p.clientY;
+      window.clearTimeout(lpTimer);
       lpTimer = window.setTimeout(() => {
         lpFired = true;
         const i = parseInt(el.dataset.line);
         if (!isNaN(i)) openLyricChat(i);
       }, 550);
     };
-    const lpCancel = () => window.clearTimeout(lpTimer);
+    const lpMove = (e) => {
+      const p = pt(e);
+      if (Math.abs(p.clientX - lpX) + Math.abs(p.clientY - lpY) > 10) window.clearTimeout(lpTimer);
+    };
+    const lpEnd = () => window.clearTimeout(lpTimer);
     el.addEventListener('touchstart', lpStart, { passive: true });
-    el.addEventListener('touchmove', lpCancel, { passive: true });
-    el.addEventListener('touchend', lpCancel, { passive: true });
+    el.addEventListener('touchmove', lpMove, { passive: true });
+    el.addEventListener('touchend', lpEnd, { passive: true });
+    el.addEventListener('touchcancel', lpEnd, { passive: true });
     el.addEventListener('mousedown', lpStart);
-    el.addEventListener('mousemove', lpCancel);
-    el.addEventListener('mouseup', lpCancel);
-    el.addEventListener('mouseleave', lpCancel);
+    el.addEventListener('mousemove', lpMove);
+    el.addEventListener('mouseup', lpEnd);
+    el.addEventListener('mouseleave', lpEnd);
     el.addEventListener('contextmenu', e => e.preventDefault());   // 原生菜单全程谢客,长按只归分享
     el.addEventListener('click', () => {
       if (lpFired) { lpFired = false; return; }   // 长按抬手别顺手 seek
