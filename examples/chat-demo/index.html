@@ -62,6 +62,8 @@
     background: var(--rose); color: #fff; cursor: pointer; flex-shrink: 0;
   }
   .lyriccard { width: 270px; padding: 12px 14px; }
+  .lyriccard .ly-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+  .lyriccard .ly-cover { width: 34px; height: 34px; border-radius: 9px; object-fit: cover; }
   .lyriccard .quote { border-left: 3px solid var(--rose); padding-left: 10px; margin: 6px 0 10px;
     font-size: 13px; color: var(--rose-deep); font-style: italic; }
   .lyriccard .at { font-size: 11px; color: var(--rose); font-variant-numeric: tabular-nums; }
@@ -191,8 +193,9 @@ function addSongCard(song, me, who) {
 
 // 歌词卡:点「跳进这句」→ music:play 捎上 at 秒数,播放器落针到那一句
 function addLyricCard(song, line, at, note, me, who) {
+  const cov = /^https?:/.test(String(song.cover || '')) ? song.cover : '';
   const el = addMsg(`<div class="lyriccard">
-      <div class="at">🎧 ${esc(song.name)} · ${mmss(at)}</div>
+      <div class="ly-head">${cov ? `<img class="ly-cover" src="${esc(cov)}" alt="">` : ''}<div class="at">🎧 ${esc(song.name)} · ${mmss(at)}</div></div>
       <div class="quote">${esc(line.text)}${line.trans ? `<br><small>${esc(line.trans)}</small>` : ''}</div>
       ${note ? `<div>${esc(note)}</div>` : ''}
       <button>跳进这句去听 ▶</button>
@@ -238,7 +241,8 @@ $('input').addEventListener('keydown', e => { if (e.key === 'Enter') send(); });
 addMsg('这是 chat-demo:右下角 ♪ 开「一起听」抽屉,里面就是播放器本体。\n播放器一开始放歌,顶栏会长出进度药丸。', false, 'demo');
 addSongCard({ songId: '1428153831', name: '夜行', artist: 'ヨルシカ',
   cover: 'https://p1.music.126.net/NcyGrm4pxBOMDHTHfdG_2A==/109951164769180658.jpg' }, false, '对方');
-addLyricCard({ songId: '1428153831', name: '夜行', artist: 'ヨルシカ' },
+addLyricCard({ songId: '1428153831', name: '夜行', artist: 'ヨルシカ',
+  cover: 'https://p1.music.126.net/NcyGrm4pxBOMDHTHfdG_2A==/109951164769180658.jpg' },
   { text: '君は忘れてしまうだろうけど思い出だけが本当なんだ', trans: '或许你早已忘却,但唯有回忆才是真实的啊' },
   100, '听到这句想起你', false, '对方');
 </script>
