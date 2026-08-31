@@ -1,13 +1,22 @@
 #!/usr/bin/env python3
 """Standalone song analysis — runs as subprocess, survives server restarts.
 
-Requires: librosa, numpy, matplotlib (optional dependencies for audio analysis).
-These are NOT required by the main music server.
+2.0 (2026-09-01): rewritten to need only numpy + ffmpeg — no librosa/matplotlib.
+(上一版要 librosa 全家桶,2G 小机器装不动;现在 ffmpeg 解码 + numpy 手搓频谱,
+ 输出同一份 preanalysis.json,外加鼓点密度/频段占比这些「听感」指标。)
+
+Requires: numpy (pip install numpy) and ffmpeg on PATH.
+Point the server at a python that has numpy via env MUSIC_ANALYZE_PYTHON.
 
 Usage:
     python3 analyze_song.py <song_id> [song_name] [song_artist] [cache_dir]
+
+Output: <cache_dir>/<song_id>_preanalysis.json
+    {songId, name, artist, duration, bpm, key, rms, onsetRate,
+     bands: {low, mid, high}, segments: [{start, end, avgEnergy, maxEnergy}]}
 """
 import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -24,58 +33,86 @@ def main():
     err_file = cache_dir / f"{song_id}_analyze_error.txt"
 
     try:
-        import librosa
         import numpy as np
 
-        y, sr = librosa.load(str(audio_file), sr=22050)
-        duration = librosa.get_duration(y=y, sr=sr)
-        tempo, _ = librosa.beat.beat_track(y=y, sr=sr)
-        rms = librosa.feature.rms(y=y)[0]
-        times_rms = librosa.times_like(rms, sr=sr)
-        chroma = librosa.feature.chroma_stft(y=y, sr=sr)
-        chroma_mean = np.mean(chroma, axis=1)
-        keys = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
-        dominant_key = keys[int(np.argmax(chroma_mean))]
+        sr = 22050
+        raw = subprocess.run(
+            ["ffmpeg", "-v", "quiet", "-i", str(audio_file), "-ac", "1",
+             "-ar", str(sr), "-f", "f32le", "-"],
+            capture_output=True, check=True).stdout
+        y = np.frombuffer(raw, dtype=np.float32)
+        if len(y) < sr:
+            raise RuntimeError("audio too short or decode failed")
+        duration = len(y) / sr
 
+        n, hop = 2048, 512
+        nf = (len(y) - n) // hop
+        idx = np.arange(n)[None, :] + hop * np.arange(nf)[:, None]
+        frames = y[idx] * np.hanning(n)
+        mag = np.abs(np.fft.rfft(frames, axis=1))
+        freqs = np.fft.rfftfreq(n, 1 / sr)
+
+        # ── 鼓点/onset:谱通量正差分,峰间至少 100ms ──
+        flux = np.maximum(np.diff(mag, axis=0), 0).sum(axis=1)
+        flux = flux / (flux.max() + 1e-9)
+        thr = flux.mean() + 1.2 * flux.std()
+        cand = np.where((flux[1:-1] > thr)
+                        & (flux[1:-1] >= flux[:-2])
+                        & (flux[1:-1] >= flux[2:]))[0] + 1
+        onsets = []
+        for t in cand:
+            if not onsets or (t - onsets[-1]) * hop / sr > 0.1:
+                onsets.append(int(t))
+        onset_rate = len(onsets) / duration
+
+        # ── 节奏:onset 包络自相关,60~200 BPM ──
+        z = flux - flux.mean()
+        ac = np.correlate(z, z, "full")[len(z) - 1:]
+        lag_min = int(60 / 200 * sr / hop)
+        lag_max = int(60 / 60 * sr / hop)
+        bpm = 60 / ((lag_min + int(np.argmax(ac[lag_min:lag_max]))) * hop / sr)
+
+        # ── 调性:能量折进 12 个音级(80~5000Hz),取最重的 ──
+        E = mag ** 2
+        band = (freqs >= 80) & (freqs < 5000)
+        with np.errstate(divide="ignore"):
+            midi = 69 + 12 * np.log2(freqs[band] / 440.0)
+        pc = (np.round(midi).astype(int)) % 12
+        chroma = np.zeros(12)
+        col = E[:, band].sum(axis=0)
+        for k in range(12):
+            chroma[k] = col[pc == k].sum()
+        keys = ["A", "A#", "B", "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#"]
+        dominant_key = keys[int(np.argmax(chroma))]
+
+        # ── 频段能量占比(听感:鼓底/主体/镲光) ──
+        tot = E.sum() + 1e-9
+        def share(lo, hi):
+            return round(float(E[:, (freqs >= lo) & (freqs < hi)].sum() / tot * 100), 1)
+        bands = {"low": share(40, 130), "mid": share(130, 2000), "high": share(5000, sr / 2)}
+
+        # ── 能量分段(与上一版同形:6 段 RMS 弧线) ──
+        rms = np.sqrt((frames ** 2).mean(axis=1))
         seg_count = 6
-        seg_len = len(rms) // seg_count
+        seg_len = max(1, len(rms) // seg_count)
         segments = []
         for i in range(seg_count):
             seg = rms[i * seg_len:(i + 1) * seg_len]
-            t0 = float(times_rms[i * seg_len])
-            t1 = float(times_rms[min((i + 1) * seg_len - 1, len(times_rms) - 1)])
+            if not len(seg):
+                break
             segments.append({
-                "start": round(t0, 1), "end": round(t1, 1),
-                "avgEnergy": round(float(np.mean(seg)), 4),
-                "maxEnergy": round(float(np.max(seg)), 4),
+                "start": round(i * seg_len * hop / sr, 1),
+                "end": round(min((i + 1) * seg_len, len(rms)) * hop / sr, 1),
+                "avgEnergy": round(float(seg.mean()), 4),
+                "maxEnergy": round(float(seg.max()), 4),
             })
-
-        import matplotlib
-        matplotlib.use('Agg')
-        import matplotlib.pyplot as plt
-        import librosa.display
-
-        fig, axes = plt.subplots(3, 1, figsize=(14, 10))
-        S = librosa.feature.melspectrogram(y=y, sr=sr, n_mels=128)
-        S_dB = librosa.power_to_db(S, ref=np.max)
-        librosa.display.specshow(S_dB, sr=sr, x_axis='time', y_axis='mel', ax=axes[0])
-        axes[0].set_title('Mel Spectrogram')
-        librosa.display.specshow(chroma, sr=sr, x_axis='time', y_axis='chroma', ax=axes[1])
-        axes[1].set_title('Chromagram')
-        axes[2].plot(times_rms, rms, color='#e74c3c', linewidth=0.8)
-        axes[2].fill_between(times_rms, rms, alpha=0.3, color='#e74c3c')
-        axes[2].set_title('Energy (RMS)')
-        axes[2].set_xlabel('Time (s)')
-        plt.tight_layout()
-        img_path = cache_dir / f"{song_id}_analysis.png"
-        plt.savefig(str(img_path), dpi=150)
-        plt.close()
 
         result = {
             "songId": song_id, "name": song_name, "artist": song_artist,
-            "duration": round(duration, 1), "bpm": round(float(tempo)),
-            "key": dominant_key, "segments": segments,
-            "spectrogram": str(img_path),
+            "duration": round(duration, 1), "bpm": round(float(bpm)),
+            "key": dominant_key, "rms": round(float(np.sqrt((y ** 2).mean())), 3),
+            "onsetRate": round(float(onset_rate), 2), "bands": bands,
+            "segments": segments,
         }
         result_file.write_text(json.dumps(result, ensure_ascii=False, indent=1))
         marker_file.unlink(missing_ok=True)

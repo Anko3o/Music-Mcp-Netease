@@ -400,6 +400,8 @@ class MusicHandler(BaseHTTPRequestHandler):
             self._handle_netease_likes_get()
         elif path == "/music/netease/record":
             self._handle_netease_record()
+        elif path == "/music/netease/profile":
+            self._handle_netease_profile()
         elif path == "/music/playlist":
             self._handle_music_playlist_get()
         elif path == "/music/playlists":
@@ -1125,6 +1127,27 @@ class MusicHandler(BaseHTTPRequestHandler):
             })
         self._send_json(200, {"ok": True, "type": rtype, "songs": out})
 
+
+    def _handle_netease_profile(self):
+        """账号档案(9-01 安可:「查听歌时长」):昵称/听歌量/等级/入网天数,只读。"""
+        try:
+            acc = self._netease_request("https://music.163.com/api/nuser/account/get")
+            uid = (acc.get("profile") or {}).get("userId")
+            if not uid:
+                self._send_json(502, {"error": "拿不到账号 uid"})
+                return
+            d = self._netease_request(f"https://music.163.com/api/v1/user/detail/{uid}")
+        except Exception:
+            self._send_json(502, {"error": "账号档案拉取失败"})
+            return
+        prof = d.get("profile") or {}
+        self._send_json(200, {"ok": True, "profile": {
+            "userId": uid, "nickname": prof.get("nickname", ""),
+            "listenSongs": d.get("listenSongs", 0), "level": d.get("level", 0),
+            "createDays": d.get("createDays", 0),
+            "signature": prof.get("signature", ""),
+        }})
+
     # ── Song memory system ──
 
     def _handle_music_memory_get(self):
@@ -1326,8 +1349,9 @@ class MusicHandler(BaseHTTPRequestHandler):
             "songId": song_id, "name": song_name, "started": time.time()
         }))
         script = str(HERE / "analyze_song.py")
+        analyze_py = os.environ.get("MUSIC_ANALYZE_PYTHON", "python3")
         subprocess.Popen(
-            ["python3", script, str(song_id), song_name, song_artist, str(cache_dir)],
+            [analyze_py, script, str(song_id), song_name, song_artist, str(cache_dir)],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
             start_new_session=True,
         )

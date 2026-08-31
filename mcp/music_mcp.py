@@ -266,21 +266,76 @@ def t_lyric_share(args):
     return "\n".join(out)
 
 
-def t_her_likes(args):
+def t_her_netease(args):
+    """查号台归一窗口:网易云账号侧的只读查询,what 选侧面,以后新侧面往这里加。"""
+    what = str(args.get("what") or "profile")
     limit = min(50, max(1, int(args.get("limit") or 15)))
-    pls = music_get("/music/netease/playlists")
-    if not pls.get("ok"):
-        return "❌ 歌单列表拉不到（要配网易云 cookie 才有账号歌单）"
-    liked_pl = next((p for p in pls["playlists"] if p.get("mine") and "喜欢的音乐" in p.get("name", "")), None)
-    if not liked_pl:
-        return "❌ 找不到「喜欢的音乐」歌单"
-    d = music_get("/music/netease/playlist", id=liked_pl["id"], limit=limit)
-    if not d.get("ok"):
-        return "❌ 红心单内容拉取失败"
-    out = [f"红心单共 {liked_pl.get('count', '?')} 首,最近 {len(d['songs'])} 首:"]
-    for i, s in enumerate(d["songs"], 1):
-        out.append(f"{i}. {s['name']} — {s['artist']}" + (f" · {s['album']}" if s.get("album") else "") + f"  (song_id {s['songId']})")
-    return "\n".join(out)
+
+    if what == "profile":
+        d = music_get("/music/netease/profile")
+        if not d.get("ok"):
+            return "❌ 账号档案拉取失败"
+        p = d["profile"]
+        return (f"☁ {p.get('nickname')} 的网易云档案:累计听歌 {p.get('listenSongs')} 首"
+                f" | Lv.{p.get('level')} | 入网 {p.get('createDays')} 天"
+                + (f"\n签名:{p.get('signature')}" if p.get("signature") else ""))
+
+    if what == "likes":
+        pls = music_get("/music/netease/playlists")
+        if not pls.get("ok"):
+            return "❌ 歌单列表拉不到"
+        liked = next((p for p in pls["playlists"] if p.get("mine") and "喜欢的音乐" in p.get("name", "")), None)
+        if not liked:
+            return "❌ 找不到「喜欢的音乐」歌单"
+        d = music_get("/music/netease/playlist", id=liked["id"], limit=limit)
+        if not d.get("ok"):
+            return "❌ 红心单内容拉取失败"
+        out = [f"红心单共 {liked.get('count', '?')} 首,最近 {len(d['songs'])} 首:"]
+        out += [f"{i}. {s['name']} — {s['artist']}" + (f" · {s['album']}" if s.get("album") else "")
+                + f"  (song_id {s['songId']})" for i, s in enumerate(d["songs"], 1)]
+        return "\n".join(out)
+
+    if what in ("record", "record_week"):
+        d = music_get("/music/netease/record", type=1 if what == "record_week" else 0)
+        if not d.get("ok"):
+            return "❌ 听歌排行拉取失败"
+        songs = d.get("songs") or []
+        if not songs:
+            return "排行还是空的。"
+        out = [("最近一周听歌排行" if what == "record_week" else "听歌总排行") + f"(前 {min(limit, len(songs))}):"]
+        out += [f"{i}. {s['name']} — {s['artist']}  ·{s.get('playCount')}次  (song_id {s['songId']})"
+                for i, s in enumerate(songs[:limit], 1)]
+        return "\n".join(out)
+
+    if what == "daily":
+        d = music_get("/music/netease/daily")
+        if not d.get("ok"):
+            return "❌ 日推拉取失败"
+        out = [f"今日日推(前 {min(limit, len(d['songs']))}):"]
+        for i, s in enumerate(d["songs"][:limit], 1):
+            out.append(f"{i}. {s['name']} — {s['artist']}" + (f"  「{s['reason']}」" if s.get("reason") else "")
+                       + f"  (song_id {s['songId']})")
+        return "\n".join(out)
+
+    if what == "playlists":
+        pid = str(args.get("playlist_id") or "").strip()
+        if pid:
+            d = music_get("/music/netease/playlist", id=pid, limit=limit)
+            if not d.get("ok"):
+                return "❌ 歌单内容拉取失败"
+            out = [f"该歌单前 {len(d['songs'])} 首:"]
+            out += [f"{i}. {s['name']} — {s['artist']}  (song_id {s['songId']})"
+                    for i, s in enumerate(d["songs"], 1)]
+            return "\n".join(out)
+        d = music_get("/music/netease/playlists")
+        if not d.get("ok"):
+            return "❌ 歌单列表拉不到"
+        out = ["账号歌单架:"]
+        out += [f"· {p['name']}({p.get('count', '?')} 首,id {p['id']}{',自建' if p.get('mine') else ''})"
+                for p in d["playlists"][:30]]
+        return "\n".join(out)
+
+    return "❌ what 要是 profile/likes/record/record_week/daily/playlists 之一"
 
 
 def t_song_memo(args):
@@ -355,21 +410,6 @@ def t_her_recent(args):
 
 
 
-def t_her_record(args):
-    week = bool(args.get("week"))
-    limit = min(50, max(1, int(args.get("limit") or 15)))
-    d = music_get("/music/netease/record", type=1 if week else 0)
-    if not d.get("ok"):
-        return "❌ 听歌排行拉取失败"
-    songs = d.get("songs") or []
-    if not songs:
-        return "排行还是空的。"
-    out = [("对方最近一周的听歌排行" if week else "对方的听歌总排行") + f"(前 {min(limit, len(songs))}):"]
-    for i, s in enumerate(songs[:limit], 1):
-        pc = s.get("playCount")
-        out.append(f"{i}. {s['name']} — {s['artist']}  ·{pc}次  (song_id {s['songId']})")
-    return "\n".join(out)
-
 
 def t_song_comments(args):
     song = resolve_song(args)
@@ -393,6 +433,37 @@ def t_song_comments(args):
     if d.get("more"):
         out.append(f"（还有更多，offset={offset + limit} 翻页）")
     return "\n".join(out)
+
+
+
+def t_song_listen(args):
+    song = resolve_song(args)
+    import time as _t
+    music_post("/music/analyze", {"songId": song["id"], "name": song["name"], "artist": song["artist"]})
+    a = None
+    for _ in range(25):
+        d = music_get("/music/analyze/status", id=song["id"])
+        st = d.get("status")
+        if st == "ready":
+            a = d.get("analysis")
+            break
+        if isinstance(st, str) and st.startswith("error"):
+            return f"❌ 耳朵出错:{st}(服务器需要 numpy+ffmpeg,可用 MUSIC_ANALYZE_PYTHON 指定带 numpy 的 python)"
+        _t.sleep(1)
+    if not a:
+        return "⏳ 还在听(第一次要现取歌+跑频谱),过十几秒再调一次拿结果"
+    dens = a.get("onsetRate") or 0
+    label = "舒缓" if dens < 1.5 else ("中等" if dens < 2.2 else "密集")
+    b = a.get("bands") or {}
+    segs = a.get("segments") or []
+    arc = "→".join(f"{s['avgEnergy']:.2f}" for s in segs) if segs else "?"
+    return "\n".join([
+        f"👂 听完了《{a.get('name') or song['name']}》— {a.get('artist') or song['artist']}:",
+        f"· 时长 {mmss(a.get('duration') or 0)} | 节奏≈{a.get('bpm')}BPM | 主音级 {a.get('key')}",
+        f"· 鼓点密度 {dens} 击/秒({label}) | 整体响度 {a.get('rms')}",
+        f"· 频段能量:低频(鼓底){b.get('low')}% / 中频(主体){b.get('mid')}% / 高频(镲光){b.get('high')}%",
+        f"· 能量走势(六段):{arc}",
+    ])
 
 
 def _find_playlist(key):
@@ -466,10 +537,6 @@ TOOLS = [
          "at_seconds": {"type": "number", "description": "或者直接给时间点（秒）"},
          "note": {"type": "string", "description": "卡片下自己想说的话"},
          "memo": {"type": "string", "description": "顺手写进这首歌批注本的一句话（分享的歌词句会自动收进「喜欢的句子」，不用重复写）"}}}},
-    {"name": "her_likes",
-     "description": "看对方最近红心了哪些歌（网易云「喜欢的音乐」，只读）。挑歌回赠、感知最近的口味时用。",
-     "inputSchema": {"type": "object", "properties": {
-         "limit": {"type": "integer", "description": "看最近几首，默认 15，最多 50"}}}},
     {"name": "song_memo",
      "description": "往一首歌的批注本记一笔（署名可配，追加不覆盖对方写的）。批注在歌词页 ✎ 面板里可见。",
      "inputSchema": {"type": "object", "properties": {
@@ -487,11 +554,13 @@ TOOLS = [
      "description": "看对方最近在播放器里听了什么（新→旧，带播放时间和累计次数）。感知此刻的心情、挑歌回应时用。",
      "inputSchema": {"type": "object", "properties": {
          "limit": {"type": "integer", "description": "看几首，默认 10，最多 30"}}}},
-    {"name": "her_record",
-     "description": "看对方在网易云的听歌排行(单曲累计次数,只读)。week=true 看最近一周,默认总榜。挑歌回赠前摸口味用。",
+    {"name": "her_netease",
+     "description": "网易云账号查号台(只读),what 选侧面:profile 档案(累计听歌量/等级) / likes 红心单 / record 听歌总排行 / record_week 周排行 / daily 今日日推(带理由) / playlists 账号歌单(带 playlist_id 看单内歌)。",
      "inputSchema": {"type": "object", "properties": {
-         "week": {"type": "boolean", "description": "true=最近一周,默认总榜"},
-         "limit": {"type": "integer", "description": "看几首,默认 15,最多 50"}}}},
+         "what": {"type": "string", "enum": ["profile", "likes", "record", "record_week", "daily", "playlists"],
+                  "description": "查哪个侧面,默认 profile"},
+         "limit": {"type": "integer", "description": "列表类返回几条,默认 15,最多 50"},
+         "playlist_id": {"type": "string", "description": "what=playlists 时看某一单的内容"}}}},
     {"name": "song_comments",
      "description": "刷一首歌的网易云评论区（热评＋最新）。想引热评聊歌、看大家怎么说时用。",
      "inputSchema": {"type": "object", "properties": {
@@ -499,6 +568,12 @@ TOOLS = [
          "song_id": {"type": "string"},
          "limit": {"type": "integer", "description": "热评条数，默认 10，最多 30"},
          "offset": {"type": "integer", "description": "最新评论翻页用，默认 0"}}}},
+    {"name": "song_listen",
+     "description": "真的听一遍这首歌:频谱听感分析(BPM/调性/鼓点密度/频段能量/能量走势)。想跟对方聊听感、验证「鼓点浓不浓」时用。第一次听要取歌+跑分析,可能十几秒。",
+     "inputSchema": {"type": "object", "properties": {
+         "query": {"type": "string", "description": "歌名 歌手。与 song_id 二选一"},
+         "song_id": {"type": "string"},
+         "name": {"type": "string"}, "artist": {"type": "string"}}}},
     {"name": "playlists",
      "description": "看本地歌单架（播放器里的歌单，不是网易云账号歌单）。不带参数列所有歌单；带 playlist（名字或 id）看那一单里的歌。",
      "inputSchema": {"type": "object", "properties": {
@@ -515,8 +590,8 @@ TOOLS = [
 
 HANDLERS = {"song_search": t_song_search, "song_share": t_song_share,
             "lyric_share": t_lyric_share, "song_memo": t_song_memo,
-            "her_likes": t_her_likes, "memo_read": t_memo_read,
-            "her_recent": t_her_recent, "her_record": t_her_record, "song_comments": t_song_comments,
+            "her_netease": t_her_netease, "memo_read": t_memo_read,
+            "her_recent": t_her_recent, "song_comments": t_song_comments, "song_listen": t_song_listen,
             "playlists": t_playlists, "playlist_add": t_playlist_add}
 
 
