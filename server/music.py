@@ -1327,7 +1327,7 @@ class MusicHandler(BaseHTTPRequestHandler):
     def _handle_music_profile_update(self, body: dict):
         data = self._load_music_data()
         profile = data.get("profile", {})
-        for k in ("avatar", "signature", "bg", "name", "appBg"):
+        for k in ("avatar", "signature", "name"):
             if k in body:
                 profile[k] = body[k]
         data["profile"] = profile

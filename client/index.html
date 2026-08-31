@@ -106,12 +106,7 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible {
   }
   .lyrics-view, .memory-view { max-width: 460px; margin-inline: auto; }
 }
-.app-bg {
-  position: absolute; inset: 0;
-  background-size: cover; background-position: center;
-  opacity: 0.28; pointer-events: none; z-index: 0;
-}
-#app > *:not(.app-bg):not(.lyrics-view):not(.memory-view):not(.mv-view) { position: relative; z-index: 1; }
+#app > *:not(.lyrics-view):not(.memory-view):not(.mv-view) { position: relative; z-index: 1; }
 
 /* ── Top Bar ── */
 .topbar {
@@ -285,7 +280,6 @@ body.window-mini .np-progress { top: auto; bottom: 0; height: 3px; }
    顶栏在 JS 里就没渲染，这里管的是「剩下的东西怎么在 561px 里活得好」。
    原则同上：不是等比缩小，是砍掉「逛」的功能、把高度还给「听」。 */
 body.embedded #app { max-width: none; border-inline: 0; box-shadow: none; }
-body.embedded .app-bg { display: none; }          /* 抽屉里背景图只会让字更难读 */
 
 /* 导航从「图标上、文字下」的两行大方块，改成一行横排小药丸：62px → 44px。 */
 body.embedded .bottom-nav {
@@ -364,16 +358,7 @@ body.embedded .ly-controls { padding: 6px 20px calc(var(--safe-bottom) + 10px); 
     radial-gradient(circle at 82% 30%, rgba(255, 237, 194, 0.7), transparent 52%),
     repeating-radial-gradient(circle at 118% -10%, rgba(194, 112, 138, 0.22) 0 2px, transparent 2px 26px),
     linear-gradient(130deg, rgba(194, 112, 138, 0.3), rgba(255, 219, 208, 0.4) 55%, rgba(255, 237, 194, 0.45));
-  background-size: cover; background-position: center;
-  cursor: pointer;
 }
-.home-hero .hero-hint {
-  position: absolute; inset: 0; display: flex; flex-direction: column;
-  align-items: center; justify-content: center; gap: 6px;
-  color: rgba(152, 78, 104, 0.75); font-size: 11px; letter-spacing: 0.1em;
-  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.8);
-}
-.home-hero .hero-note { font-size: 26px; opacity: 0.7; }
 .home-profile {
   position: relative; display: flex; flex-direction: column; align-items: center;
   padding: 0 20px 22px;
@@ -1794,7 +1779,7 @@ function renderApp() {
   const app = document.getElementById('app');
 
   /* 抽屉里整条顶栏不生成（不是 display:none —— 干脆不渲染，省 52px 也省三个废按钮）。
-     顺带 Home 那个 tab 也不给：个人主页、换背景图、签名都是「逛」的功能，
+     顺带 Home 那个 tab 也不给：个人主页、签名都是「逛」的功能，
         Drawer mode hides the profile page: the drawer is for listening. */
   const topbarHTML = isEmbedded ? '' : `
     <div class="topbar">
@@ -1815,7 +1800,6 @@ function renderApp() {
       </button>`;
 
   app.innerHTML = `
-    <div class="app-bg" id="app-bg"></div>
     ${topbarHTML}
     <div class="tab-body" id="tab-body"></div>
     <div class="np-bar hidden" id="np-bar"></div>
@@ -1928,13 +1912,9 @@ async function renderHome(container) {
   if (profRes.ok) homeProfile = profRes.profile;
   if (recentRes.ok) homeRecent = recentRes.songs || [];
 
-  if (!homeProfile) homeProfile = { name: '', signature: '', avatar: '', bg: '' };
+  if (!homeProfile) homeProfile = { name: '', signature: '', avatar: '' };
 
   // Set app bg
-  if (homeProfile.appBg) {
-    const bgEl = document.getElementById('app-bg');
-    if (bgEl) bgEl.style.backgroundImage = 'url(' + homeProfile.appBg + ')';
-  }
 
   container.innerHTML = buildHomeHTML();
   bindHomeEvents(container);
@@ -1964,14 +1944,12 @@ function buildRecentSection() {
 
 function buildHomeHTML() {
   const p = homeProfile;
-  const heroStyle = p.bg ? ` style="background-image:url(${esc(p.bg)}); background-size:cover; background-position:center;"` : '';
-  const heroInner = p.bg ? '' : '<div class="hero-hint"><span class="hero-note">♪</span><span>点这里,换一张家里的背景图</span></div>';
 
   const recentHTML = buildRecentSection();
 
   return `<div class="home-tab">
     <div class="home-card">
-      <div class="home-hero" id="home-hero"${heroStyle}>${heroInner}</div>
+      <div class="home-hero"></div>
       <div class="home-profile">
         <div class="home-avatar" id="home-avatar">
           ${p.avatar ? '<img src="' + esc(p.avatar) + '" alt="" />' : '<span>+</span>'}
@@ -2010,13 +1988,6 @@ function bindHomeEvents(container) {
     renderTab();
   }));
 
-  // Hero BG
-  const heroEl = container.querySelector('#home-hero');
-  if (heroEl) heroEl.addEventListener('click', () => pickImage(800, url => {
-    homeProfile.bg = url;
-    updateProfile({ bg: url });
-    renderTab();
-  }));
 }
 
 function startEditField(field) {
