@@ -2,7 +2,7 @@
 """Standalone song analysis — runs as subprocess, survives server restarts.
 
 Requires: librosa, numpy, matplotlib (optional dependencies for audio analysis).
-These are NOT required by the main eryu server.
+These are NOT required by the main music server.
 
 Usage:
     python3 analyze_song.py <song_id> [song_name] [song_artist] [cache_dir]
