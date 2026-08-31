@@ -39,7 +39,7 @@ cd music-mcp-netease
 # 你的网易云 cookie（决定曲库权限与账号同步）
 echo "MUSIC_U=your_cookie_here" > server/.netease_cred
 
-python3 server/eryu.py          # 默认 :9090
+python3 server/music.py          # 默认 :9090
 ```
 
 打开 `http://localhost:9090`。
