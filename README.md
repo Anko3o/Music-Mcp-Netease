@@ -4,9 +4,10 @@
 
 > 基于 [eryu（耳屿）](https://github.com/sebastianevan200-stack/eryu) © 2026 Evelyn & River建设。
 >
-> 纯 Python 标准库 + 原生 JS，零依赖，只需要一条命令就能抛。
+> 纯 Python 标准库 + 原生 JS，零依赖，只需要一条命令就能跑。
 
 以下全文由rime撰写，anko负责当搬运工。=￣ω￣=
+
 ---
 
 ## 为什么会有这个版本
