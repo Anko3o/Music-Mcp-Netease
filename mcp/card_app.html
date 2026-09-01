@@ -43,7 +43,7 @@
   .np { margin-top: 8px; }
   .np[hidden] { display: none; }
   .np-bar { height: 4px; border-radius: 999px; background: rgba(255,255,255,.14); overflow: hidden; }
-  .np-fill { height: 100%; width: 0%; border-radius: 999px; background: #9fd0c9; transition: width .9s linear; }
+  .np-fill { height: 100%; width: 0%; border-radius: 999px; background: #9fd0c9; transition: width .4s linear; }
   .np-time { display: flex; justify-content: space-between; font-size: 10px; color: #8b93a2; margin-top: 3px; }
   .btns { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
   button {
@@ -203,13 +203,24 @@
       var d = {};
       try { d = JSON.parse(res.contents[0].text); } catch (e) {}
       if (d.ok && String(d.songId) === String(song.songId)) {
-        np.ok = true; np.dur = d.duration || 0; np.pos = d.position || 0; np.playing = !!d.playing;
+        np.ok = true; np.dur = d.duration || 0; np.playing = !!d.playing;
+        // 消滞后（9-01 安可耳测慢 0.5-0.7s）：位置要加回服务端存龄 age，
+        // 再补 0.35s 链路半程（上报+轮询往返），不然高亮永远追着唱
+        np.basePos = (d.position || 0) + (np.playing ? (d.age || 0) + 0.35 : 0);
+        np.baseAt = performance.now();
+        np.pos = np.basePos;
       } else { np.ok = false; }
       npRender();
     }).catch(function () { np.fails += 1; if (np.fails >= 3) { clearInterval(npTimer); } });
   }
   var npTimer = setInterval(npPoll, 5000);
-  setInterval(function () { if (np.ok && np.playing) { np.pos += 1; npRender(); } }, 1000);
+  // 插值改真实时钟：每 0.4s 按毫秒推算，不再整秒跳
+  setInterval(function () {
+    if (np.ok && np.playing) {
+      np.pos = np.basePos + (performance.now() - np.baseAt) / 1000;
+      npRender();
+    }
+  }, 400);
 
   // 身高播报：claude.ai 直接量 DOM，但守规矩的宿主听 size-changed 通知——两头都照顾
   function reportSize() {
