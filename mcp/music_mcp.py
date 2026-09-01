@@ -163,12 +163,26 @@ def cover_data_uri(url):
 
 
 def app_struct(kind, card_song, **extra):
-    """组一份给 Apps 视图的 structuredContent：封面 data URI 化＋带播放器入口。"""
-    s = dict(card_song, cover=cover_data_uri(card_song.get("cover")))
+    """组一份给 Apps 视图的 structuredContent。
+    Field-tested lesson: do NOT inline covers as data URIs — claude.ai silently
+    drops large base64 values from structuredContent, while plain external URLs
+    load fine through the CSP resourceDomains declared in resources/read.
+    Keep the payload small and external."""
+    cover = str(card_song.get("cover") or "").replace("http://", "https://", 1)
+    s = dict(card_song, cover=cover)
     out = {"kind": kind, "song": s}
     if PLAYER_PUBLIC_URL:
         out["player_url"] = PLAYER_PUBLIC_URL
     out.update(extra)
+    if out.get("lyrics"):
+        # second half of the same lesson: keep lyrics under ~4KB too
+        trimmed, budget = [], 4000
+        for row in out["lyrics"]:
+            budget -= len(row.get("x", "")) + len(row.get("tr", "")) + 12
+            if budget < 0:
+                break
+            trimmed.append(row)
+        out["lyrics"] = trimmed
     return out
 
 
