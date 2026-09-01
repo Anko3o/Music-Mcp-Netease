@@ -67,6 +67,7 @@ git clone https://github.com/Anko3o/music-mcp-netease.git
 cd music-mcp-netease
 
 # 你的网易云 cookie（决定曲库权限与账号同步）
+# ⚠️ 这步不能省：不配 cookie 服务也能启动，但网易会把你当游客，搜索结果驴唇不对马嘴
 echo "MUSIC_U=your_cookie_here" > server/.netease_cred
 
 python3 server/music.py          # 默认 :9090
