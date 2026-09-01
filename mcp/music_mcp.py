@@ -680,6 +680,15 @@ class H(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path.rstrip("/") == "/healthz":
             return self._send(200, {"ok": True, "service": "music-mcp"})
+        if self.path.rstrip("/") == "/mcp":
+            # Streamable HTTP: GET opens the optional SSE stream; we don't, so 405 per spec
+            return self._send(405, {"error": "SSE not supported, POST only"})
+        self._send(404, {"error": "not found"})
+
+    def do_DELETE(self):
+        # Hosts send DELETE /mcp on session teardown; we're stateless, acknowledge politely
+        if self.path.rstrip("/") == "/mcp":
+            return self._send(200, {"ok": True})
         self._send(404, {"error": "not found"})
 
     def do_POST(self):
