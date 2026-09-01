@@ -431,6 +431,8 @@ class MusicHandler(BaseHTTPRequestHandler):
             self._handle_music_similar()
         elif path == "/music/remote":
             self._handle_music_remote_get()
+        elif path == "/music/now":
+            self._handle_music_now_get()
         elif path == "/music/analyze/status":
             self._handle_analyze_status()
         else:
@@ -476,6 +478,8 @@ class MusicHandler(BaseHTTPRequestHandler):
             self._handle_music_profile_update(body)
         elif path == "/music/remote":
             self._handle_music_remote_post(body)
+        elif path == "/music/now":
+            self._handle_music_now_post(body)
         else:
             self._send_json(404, {"error": "not found"})
 
@@ -1641,6 +1645,30 @@ class MusicHandler(BaseHTTPRequestHandler):
             self._send_json(200, {"ok": True, "songs": [], "error": str(e)})
 
     # ── Remote play ──
+
+    # ── Now-playing heartbeat ──
+    #    The player POSTs its playback state every 5s; kept in memory only.
+    #    The MCP's music://now resource relays it to the Apps card for the
+    #    progress bar and live lyric highlighting.
+
+    def _handle_music_now_post(self, body: dict):
+        self.state.now_playing = {
+            "songId": str(body.get("songId") or ""),
+            "name": body.get("name") or "",
+            "artist": body.get("artist") or "",
+            "position": float(body.get("position") or 0),
+            "duration": float(body.get("duration") or 0),
+            "playing": bool(body.get("playing")),
+            "at": time.time(),
+        }
+        self._send_json(200, {"ok": True})
+
+    def _handle_music_now_get(self):
+        now = getattr(self.state, "now_playing", None)
+        if not now or time.time() - now.get("at", 0) > 30:
+            self._send_json(200, {"ok": False})
+            return
+        self._send_json(200, dict(now, ok=True, age=round(time.time() - now.get("at", 0), 1)))
 
     def _handle_music_remote_get(self):
         # 8-31 升级成小队列:上游是单曲文件、后到覆盖先到;现在攒成列表一次全交,

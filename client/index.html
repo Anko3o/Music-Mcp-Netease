@@ -3435,6 +3435,22 @@ setInterval(async () => {
   } catch {}
 }, 5000);
 
+// ── Now-playing heartbeat ──
+//    Report playback state every 5s (kept in server memory); the MCP Apps card
+//    uses it for its progress bar and live lyric highlighting.
+setInterval(() => {
+  try {
+    if (!state.song || !state.song.songId) return;
+    apiPost('/music/now', {
+      songId: String(state.song.songId), name: state.song.name || '',
+      artist: state.song.artist || '',
+      position: Math.round((audio.currentTime || 0) * 10) / 10,
+      duration: Math.round((audio.duration || state.duration || 0) * 10) / 10,
+      playing: !!state.playing && !audio.paused,
+    }).catch(() => {});
+  } catch {}
+}, 5000);
+
 // ── Init ──
 setupMediaSession();
 loadLikedIds();   // load the liked-song ledger at boot (local + NetEase account merged)

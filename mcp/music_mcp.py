@@ -816,6 +816,7 @@ class H(BaseHTTPRequestHandler):
             res_list = []
             if os.path.exists(APP_HTML_PATH):
                 res_list.append({"uri": UI_RESOURCE_URI, "name": "song card app", "mimeType": UI_MIME})
+            res_list.append({"uri": "music://now", "name": "now playing state", "mimeType": "application/json"})
             r = {"resources": res_list}
         elif method == "resources/read":
             uri = str(((msg.get("params") or {}).get("uri")) or "")
@@ -831,6 +832,14 @@ class H(BaseHTTPRequestHandler):
                                                    + ([CARD_IMAGE_BASE] if CARD_IMAGE_BASE else []),
                                 "connectDomains": []},
                         "prefersBorder": True}}}]}
+            elif uri == "music://now":
+                # data source for the card's progress bar: player heartbeat -> /music/now -> here
+                try:
+                    now = music_get("/music/now")
+                except Exception as e:
+                    now = {"ok": False, "error": str(e)}
+                r = {"contents": [{"uri": uri, "mimeType": "application/json",
+                                   "text": json.dumps(now, ensure_ascii=False)}]}
             else:
                 return self._send(200, {"jsonrpc": "2.0", "id": mid,
                                         "error": {"code": -32002, "message": f"resource not found: {uri}"}})

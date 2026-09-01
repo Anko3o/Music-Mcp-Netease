@@ -5,6 +5,8 @@
 <title>music card</title>
 <style>
   :root { color-scheme: dark; }
+  /* 宿主 iframe 可能比内容高——html 打同色底，别让下边缘露出窟窿（9-01 真机） */
+  html { background: #12151c; min-height: 100%; }
   * { margin: 0; box-sizing: border-box; }
   body {
     font-family: 'PingFang SC', 'Noto Sans SC', 'Microsoft YaHei', system-ui, sans-serif;
@@ -31,11 +33,18 @@
   .line .t { color: #7d8595; font-size: 11px; margin-left: 6px; }
   .note { font-size: 12px; color: #aeb6c4; margin-top: 4px; font-style: italic; }
   .note[hidden], .line[hidden], button[hidden] { display: none; }
-  .lyrics { margin-top: 8px; max-height: 190px; overflow-y: auto; font-size: 12px;
+  /* 展开=整篇铺开不搞内部滚动：手机上嵌套滚动会被外层聊天页抢走（9-01 真机），
+     反正卡片高度随 DOM 自适应，让聊天页自己滚最顺手 */
+  .lyrics { margin-top: 8px; font-size: 12px;
             line-height: 1.7; color: #aeb6c4; border-top: 1px solid rgba(255,255,255,.08);
-            padding-top: 6px; scroll-behavior: smooth; }
+            padding-top: 6px; }
   .lyrics div.cur { color: #9fd0c9; font-weight: 700; }
   .lyrics span.tr { color: #7d8595; font-size: 11px; margin-left: 6px; }
+  .np { margin-top: 8px; }
+  .np[hidden] { display: none; }
+  .np-bar { height: 4px; border-radius: 999px; background: rgba(255,255,255,.14); overflow: hidden; }
+  .np-fill { height: 100%; width: 0%; border-radius: 999px; background: #9fd0c9; transition: width .9s linear; }
+  .np-time { display: flex; justify-content: space-between; font-size: 10px; color: #8b93a2; margin-top: 3px; }
   .btns { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
   button {
     font: inherit; font-size: 12px; color: #fff; cursor: pointer;
@@ -62,6 +71,10 @@
       <button id="btn-player" hidden>🎧 打开播放器</button>
       <button id="btn-lyrics" hidden>📜 歌词</button>
     </div>
+    <div class="np" id="np" hidden>
+      <div class="np-bar"><div class="np-fill" id="np-fill"></div></div>
+      <div class="np-time"><span id="np-cur">0:00</span><span id="np-tot">0:00</span></div>
+    </div>
     <div class="status" id="status"></div>
   </div>
 </div>
@@ -81,7 +94,9 @@
   window.addEventListener("message", function (ev) {
     var m = ev.data;
     if (!m || m.jsonrpc !== "2.0") return;
-    if (m.id && pending[m.id]) {                     // response to our request
+    if (m.id && pending[m.id] && !m.method) {        // response to our request
+      // （!m.method 防卫：带 method 的是请求不是响应——同窗测试环境里会听到
+      //   自己发出去的请求回声，别把它误当空响应吞掉）
       var p = pending[m.id]; delete pending[m.id];
       if (m.error) p.no(m.error); else p.ok(m.result);
       return;
@@ -98,6 +113,7 @@
   function render(sc) {
     if (!sc || !sc.song) return;
     song = sc.song;
+    setTimeout(function () { try { npPoll(); } catch (e) {} }, 300);
     byId("name").textContent = song.name || "";
     byId("artist").textContent = song.artist + (song.album ? " · " + song.album : "");
     if (song.cover) {
@@ -130,6 +146,7 @@
       sc.lyrics.forEach(function (l) {
         if (!l.x) return;
         var d = document.createElement("div");
+        d.dataset.t = l.t;   // 跟唱高亮用：每行记住自己的时间戳
         d.appendChild(document.createTextNode(l.x));
         if (l.tr) { var s = document.createElement("span"); s.className = "tr"; s.textContent = l.tr; d.appendChild(s); }
         if (curAt !== null && Math.abs(l.t - curAt) < 0.5) { d.className = "cur"; curEl = d; }
@@ -140,7 +157,6 @@
       lb.onclick = function () {
         panel.hidden = !panel.hidden;
         lb.textContent = panel.hidden ? "📜 歌词" : "📜 收起";
-        if (!panel.hidden && curEl) curEl.scrollIntoView({ block: "center" });
       };
     }
   }
@@ -159,6 +175,42 @@
   }
   byId("btn-queue").addEventListener("click", function () { play("queue", "已插队"); });
   byId("btn-now").addEventListener("click", function () { play("now", "已开播"); });
+  // 进度条＋跟唱（9-01 安可点单「优化一下嵌入进度条」）：播放器 5 秒一跳心跳 →
+  // 服务端 /music/now → MCP 的 music://now 资源 → 这里轮询。只在卡片这首正在播时亮，
+  // 本地 1s 插值让指针平滑走；歌词面板开着时顺带点亮当前行＝真·跟唱。
+  var np = { pos: 0, dur: 0, playing: false, ok: false, fails: 0 };
+  function npRender() {
+    var box = byId("np");
+    if (!np.ok || !np.dur) { box.hidden = true; return; }
+    box.hidden = false;
+    byId("np-fill").style.width = Math.min(100, np.pos / np.dur * 100) + "%";
+    byId("np-cur").textContent = mmss(np.pos);
+    byId("np-tot").textContent = mmss(np.dur);
+    var panel = byId("lyrics");
+    if (!panel.hidden) {
+      var rows = panel.children, want = null;
+      for (var i = 0; i < rows.length; i++) {
+        var t = parseFloat(rows[i].dataset.t);
+        if (!isNaN(t) && t <= np.pos) want = rows[i];
+      }
+      for (var j = 0; j < rows.length; j++) rows[j].classList.toggle("cur", rows[j] === want);
+    }
+  }
+  function npPoll() {
+    if (!song) return;
+    rpc("resources/read", { uri: "music://now" }).then(function (res) {
+      np.fails = 0;
+      var d = {};
+      try { d = JSON.parse(res.contents[0].text); } catch (e) {}
+      if (d.ok && String(d.songId) === String(song.songId)) {
+        np.ok = true; np.dur = d.duration || 0; np.pos = d.position || 0; np.playing = !!d.playing;
+      } else { np.ok = false; }
+      npRender();
+    }).catch(function () { np.fails += 1; if (np.fails >= 3) { clearInterval(npTimer); } });
+  }
+  var npTimer = setInterval(npPoll, 5000);
+  setInterval(function () { if (np.ok && np.playing) { np.pos += 1; npRender(); } }, 1000);
+
   // 身高播报：claude.ai 直接量 DOM，但守规矩的宿主听 size-changed 通知——两头都照顾
   function reportSize() {
     try {
