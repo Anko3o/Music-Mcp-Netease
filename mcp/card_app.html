@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>music card</title>
+<style>
+  :root { color-scheme: dark; }
+  * { margin: 0; box-sizing: border-box; }
+  body {
+    font-family: 'PingFang SC', 'Noto Sans SC', 'Microsoft YaHei', system-ui, sans-serif;
+    background: linear-gradient(180deg, #2b3140, #12151c);
+    color: #fff; padding: 18px; border-radius: 14px;
+  }
+  .card { display: flex; gap: 18px; align-items: flex-start; }
+  .cover {
+    width: 108px; height: 108px; border-radius: 12px; flex: none;
+    background: #3a4150 center/cover no-repeat; overflow: hidden;
+    display: flex; align-items: center; justify-content: center; font-size: 44px;
+  }
+  .cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .meta { min-width: 0; flex: 1; }
+  .name { font-size: 19px; font-weight: 700; line-height: 1.3;
+          overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .artist { font-size: 13px; color: #c5cbd6; margin-top: 3px;
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .line { font-size: 14px; color: #9fd0c9; margin-top: 8px; line-height: 1.5; }
+  .line .t { color: #7d8595; font-size: 12px; margin-left: 6px; }
+  .note { font-size: 13px; color: #aeb6c4; margin-top: 6px; font-style: italic; }
+  .btns { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+  button {
+    font: inherit; font-size: 13px; color: #fff; cursor: pointer;
+    background: rgba(255,255,255,.10); border: 1px solid rgba(255,255,255,.18);
+    border-radius: 999px; padding: 6px 14px;
+  }
+  button:hover { background: rgba(255,255,255,.18); }
+  button:disabled { opacity: .5; cursor: default; }
+  .status { font-size: 12px; color: #8b93a2; margin-top: 8px; min-height: 15px; white-space: pre-line; }
+  .foot { text-align: right; font-size: 11px; color: #6d7585; margin-top: 6px; }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="cover" id="cover">♪</div>
+  <div class="meta">
+    <div class="name" id="name">…</div>
+    <div class="artist" id="artist"></div>
+    <div class="line" id="line" hidden></div>
+    <div class="note" id="note" hidden></div>
+    <div class="btns">
+      <button id="btn-queue">⏯ 插进接下来播</button>
+      <button id="btn-now">▶ 立刻开播</button>
+    </div>
+    <div class="status" id="status"></div>
+  </div>
+</div>
+<div class="foot">♪ music-mcp</div>
+<script>
+(function () {
+  "use strict";
+  var seq = 0, pending = {}, song = null;
+  function rpc(method, params) {
+    return new Promise(function (resolve, reject) {
+      var id = "app-" + (++seq);
+      pending[id] = { ok: resolve, no: reject };
+      window.parent.postMessage({ jsonrpc: "2.0", id: id, method: method, params: params || {} }, "*");
+    });
+  }
+  window.addEventListener("message", function (ev) {
+    var m = ev.data;
+    if (!m || m.jsonrpc !== "2.0") return;
+    if (m.id && pending[m.id]) {                     // response to our request
+      var p = pending[m.id]; delete pending[m.id];
+      if (m.error) p.no(m.error); else p.ok(m.result);
+      return;
+    }
+    if (m.method === "ui/notifications/tool-result" && m.params) {
+      render((m.params.structuredContent) || (m.params.result && m.params.result.structuredContent));
+    } else if (m.method === "ui/notifications/tool-input" && m.params && m.params.arguments) {
+      var a = m.params.arguments;
+      if (!song && (a.name || a.query)) byId("name").textContent = a.name || a.query;
+    }
+  });
+  function byId(i) { return document.getElementById(i); }
+  function mmss(t) { t = Math.max(0, Math.round(t)); return Math.floor(t / 60) + ":" + String(t % 60).padStart(2, "0"); }
+  function render(sc) {
+    if (!sc || !sc.song) return;
+    song = sc.song;
+    byId("name").textContent = song.name || "";
+    byId("artist").textContent = song.artist + (song.album ? " · " + song.album : "");
+    if (song.cover) {
+      var img = new Image();
+      img.onload = function () { var c = byId("cover"); c.textContent = ""; c.appendChild(img); };
+      img.src = String(song.cover).replace(/^http:/, "https:") + (String(song.cover).indexOf("?") < 0 ? "?param=200y200" : "");
+    }
+    var lineEl = byId("line");
+    if (sc.kind === "lyric" && sc.lyric && sc.lyric.line) {
+      var l = sc.lyric.line;
+      lineEl.innerHTML = "";
+      lineEl.appendChild(document.createTextNode("「" + l.text + "」" + (l.trans ? " " + l.trans : "")));
+      var t = document.createElement("span"); t.className = "t"; t.textContent = mmss(sc.lyric.at);
+      lineEl.appendChild(t);
+      lineEl.hidden = false;
+    }
+    if (sc.note) { byId("note").textContent = sc.note; byId("note").hidden = false; }
+  }
+  function play(mode, label) {
+    if (!song) { byId("status").textContent = "还没拿到歌曲信息…"; return; }
+    var btns = document.querySelectorAll("button");
+    btns.forEach(function (b) { b.disabled = true; });
+    byId("status").textContent = "…";
+    rpc("tools/call", { name: "song_share", arguments: { song_id: String(song.songId), mode: mode } })
+      .then(function (r) {
+        var txt = (r && r.content && r.content[0] && r.content[0].text) || "";
+        byId("status").textContent = txt || (label + " ✓");
+      })
+      .catch(function (e) { byId("status").textContent = "❌ " + (e && e.message || "没成功"); })
+      .then(function () { btns.forEach(function (b) { b.disabled = false; }); });
+  }
+  byId("btn-queue").addEventListener("click", function () { play("queue", "已插队"); });
+  byId("btn-now").addEventListener("click", function () { play("now", "已开播"); });
+  rpc("ui/initialize", { protocolVersion: "2026-01-26", appInfo: { name: "music card", version: "1.0.0" } })
+    .then(function (res) {
+      // 宿主可能把触发本视图的工具结果直接塞在 initialize 结果里
+      if (res && res.toolResult && res.toolResult.structuredContent) render(res.toolResult.structuredContent);
+    })
+    .catch(function () { /* 不支持也不至于白屏：等 tool-result 通知 */ });
+})();
+</script>
+</body>
+</html>

@@ -29,6 +29,7 @@ import re
 import sys
 import urllib.parse
 import urllib.request
+import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 HOST = os.environ.get("MCP_HOST", "127.0.0.1")
@@ -96,6 +97,28 @@ def card_image_md(song, line=""):
             f"![♪ {song['name']} — {song['artist']}]({url})")
 
 
+# ── MCP Apps：官端真·交互卡片 ─────────────────────────────
+# 规范 io.modelcontextprotocol/ui（2026-01-26）。song_share / lyric_share 挂 ui:// 模板，
+# 支持 Apps 的宿主（claude.ai / ChatGPT / Goose…）把 card_app.html 渲染成可点的卡片
+# （封面/歌词句 + 插队/立刻播按钮）；不支持的宿主照旧看纯文字，互不打扰。
+
+UI_RESOURCE_URI = "ui://music/card.html"
+UI_MIME = "text/html;profile=mcp-app"
+APP_HTML_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "card_app.html")
+STRUCT = threading.local()
+
+
+def set_struct(obj):
+    """分享工具顺手放一份结构化数据，tools/call 结果带上它供 Apps 视图渲染。"""
+    STRUCT.value = obj
+
+
+def pop_struct():
+    v = getattr(STRUCT, "value", None)
+    STRUCT.value = None
+    return v
+
+
 # ── 歌与歌词 ────────────────────────────────────────────────
 
 def search_songs(q, limit=6):
@@ -108,8 +131,18 @@ def resolve_song(args):
     sid = str(args.get("song_id") or "").strip()
     query = str(args.get("query") or "").strip()
     if sid:
-        return {"id": sid, "name": args.get("name") or "", "artist": args.get("artist") or "",
-                "album": args.get("album") or "", "cover": args.get("cover") or ""}
+        if args.get("name"):
+            return {"id": sid, "name": args.get("name") or "", "artist": args.get("artist") or "",
+                    "album": args.get("album") or "", "cover": args.get("cover") or ""}
+        # 只有 id 没有歌名：借 search 的链接识别路径拿完整元数据（歌名/歌手/封面），
+        # 不然卡片和批注里全是空壳。拿不到就退回裸 id。
+        try:
+            songs = search_songs(f"https://music.163.com/song?id={sid}", 1)
+            if songs and str(songs[0].get("id")) == sid:
+                return songs[0]
+        except Exception:
+            pass
+        return {"id": sid, "name": "", "artist": "", "album": "", "cover": ""}
     if not query:
         raise ValueError("要么给 query（歌名 歌手），要么给 song_id")
     songs = search_songs(query, 1)
@@ -205,9 +238,10 @@ def t_song_share(args):
         done.append(("▶ 已递到播放器,立刻开播" if mode == "now" else "⏯ 已插进「接下来播」(播放器开着 5s 内接走)")
                     + f"：{song['name']} — {song['artist']}")
     else:
-        res = send_card("song", str(args.get("note") or ""), {"song": {
-            "songId": str(song["id"]), "name": song["name"], "artist": song["artist"],
-            "album": song.get("album", ""), "cover": song.get("cover", "")}})
+        card_song = {"songId": str(song["id"]), "name": song["name"], "artist": song["artist"],
+                     "album": song.get("album", ""), "cover": song.get("cover", "")}
+        set_struct({"kind": "song", "song": card_song, "note": str(args.get("note") or "")})
+        res = send_card("song", str(args.get("note") or ""), {"song": card_song})
         if res is None:
             done.append(f"♪ 歌曲卡（未配 CARD_WEBHOOK_URL，请直接转述）：{song['name']} — {song['artist']}"
                         + (f" · {song['album']}" if song.get("album") else "") + f"  (song_id {song['id']})")
@@ -264,10 +298,13 @@ def t_lyric_share(args):
         lyric["prev"] = pack(idx - 1)
     if pack(idx + 1):
         lyric["next"] = pack(idx + 1)
+    card_song = {"songId": str(song["id"]), "name": song["name"], "artist": song["artist"],
+                 "album": song.get("album", ""), "cover": song.get("cover", "")}
+    set_struct({"kind": "lyric", "lyric": lyric, "song": card_song,
+                "note": str(args.get("note") or "")})
     res = send_card("lyric", str(args.get("note") or ""), {
         "lyric": lyric,
-        "song": {"songId": str(song["id"]), "name": song["name"], "artist": song["artist"],
-                 "album": song.get("album", ""), "cover": song.get("cover", "")}})
+        "song": card_song})
     out = []
     if res is None:
         out.append(f"🎧 歌词卡（未配 CARD_WEBHOOK_URL，请直接转述）：{song['name']} {mmss(cur['time'])}「{cur['text']}」"
@@ -657,14 +694,23 @@ class H(BaseHTTPRequestHandler):
         if mid is None:
             return self._send(202, None)
         if method == "initialize":
-            r = {"protocolVersion": PROTOCOL, "capabilities": {"tools": {}},
-                 "serverInfo": {"name": "music", "version": "1.1.0"},
+            # Apps 宿主会带新版协议号（如 2026-01-26）：格式认得就跟着走，否则回我们的
+            client_pv = str((msg.get("params") or {}).get("protocolVersion") or "")
+            pv = client_pv if re.match(r"^20\d{2}-\d{2}-\d{2}$", client_pv) else PROTOCOL
+            r = {"protocolVersion": pv, "capabilities": {"tools": {}, "resources": {}},
+                 "serverInfo": {"name": "music", "version": "1.2.0"},
                  "instructions": (
                      "点歌台。song_share mode=now 会打断对方正在听的，仅在明确要求立刻听时用；"
                      "默认发卡片或排队。lyric_share 的卡片可点击跳进歌曲对应段落。"
                      "批注 append-only，不覆盖对方手写的内容。")}
         elif method == "tools/list":
-            r = {"tools": TOOLS}
+            tools = []
+            for t in TOOLS:
+                if t["name"] in ("song_share", "lyric_share") and os.path.exists(APP_HTML_PATH):
+                    t = dict(t)
+                    t["_meta"] = {"ui": {"resourceUri": UI_RESOURCE_URI}}
+                tools.append(t)
+            r = {"tools": tools}
         elif method == "tools/call":
             p = msg.get("params") or {}
             try:
@@ -672,8 +718,33 @@ class H(BaseHTTPRequestHandler):
             except Exception as e:
                 text = f"❌ 执行出错: {e}"
             r = {"content": [{"type": "text", "text": text}]}
+            struct = pop_struct()
+            if struct is not None:
+                r["structuredContent"] = struct
             if text.startswith("❌"):
                 r["isError"] = True
+        elif method == "resources/list":
+            res_list = []
+            if os.path.exists(APP_HTML_PATH):
+                res_list.append({"uri": UI_RESOURCE_URI, "name": "song card app", "mimeType": UI_MIME})
+            r = {"resources": res_list}
+        elif method == "resources/read":
+            uri = str(((msg.get("params") or {}).get("uri")) or "")
+            if uri == UI_RESOURCE_URI and os.path.exists(APP_HTML_PATH):
+                with open(APP_HTML_PATH, encoding="utf-8") as f:
+                    html = f.read()
+                r = {"contents": [{
+                    "uri": UI_RESOURCE_URI, "mimeType": UI_MIME, "text": html,
+                    "_meta": {"ui": {
+                        # 封面直连网易图床；配了 MUSIC_CARD_BASE 也放行（备用）
+                        "csp": {"resourceDomains": ["https://p1.music.126.net", "https://p2.music.126.net",
+                                                    "https://p3.music.126.net", "https://p4.music.126.net"]
+                                                   + ([CARD_IMAGE_BASE] if CARD_IMAGE_BASE else []),
+                                "connectDomains": []},
+                        "prefersBorder": True}}}]}
+            else:
+                return self._send(200, {"jsonrpc": "2.0", "id": mid,
+                                        "error": {"code": -32002, "message": f"resource not found: {uri}"}})
         elif method == "ping":
             r = {}
         else:

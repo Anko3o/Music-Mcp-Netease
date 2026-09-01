@@ -133,7 +133,11 @@ MCP 环境变量：
 
 #### 接官端（claude.ai / ChatGPT）时的卡片
 
-官端聊天窗不渲染自定义组件，但渲染 markdown 图片——所以 server 提供 `GET /music/card?id=&line=`：现画一张 900×300 的歌曲卡（封面取色渐变底＋歌名/歌手/一句歌词；有 Pillow＋CJK 字体出 PNG，没有则退自包含 SVG）。配置 `MUSIC_CARD_BASE` 后，`song_share` / `lyric_share` 会附上这行图片 markdown，AI 原样贴进回复即可。注意两点：卡片端点**免鉴权**（官端 `<img>` 带不了凭证；内容只有封面/歌名/一句歌词这类公开数据），反代放行 `/music/card` 即可；PNG 需要 `pip install pillow` 和一套中文字体（如 `fonts-noto-cjk`，或用 `MUSIC_CARD_FONT` 指定字体文件）。
+两条路，各自独立可用：
+
+**① MCP Apps（真·交互卡片）**：本 MCP 实现了官方 [MCP Apps 扩展](https://apps.extensions.modelcontextprotocol.io/)（`io.modelcontextprotocol/ui`，2026-01-26 规范）——`song_share` / `lyric_share` 挂了 `ui://music/card.html` 模板（[`mcp/card_app.html`](./mcp/card_app.html)，零依赖手搓）。支持 Apps 的宿主（claude.ai 网页/桌面、ChatGPT、Goose、VS Code 等）会把分享结果渲染成**可点的卡片**：封面＋歌名＋歌词句，还有「插进接下来播 / 立刻开播」两个按钮直接反控播放器。不支持 Apps 的宿主自动退回纯文字，互不打扰，无需配置。
+
+**② 卡片图（markdown 图片，兜底）**：官端聊天窗不渲染自定义组件，但渲染 markdown 图片——所以 server 提供 `GET /music/card?id=&line=`：现画一张 900×300 的歌曲卡（封面取色渐变底＋歌名/歌手/一句歌词；有 Pillow＋CJK 字体出 PNG，没有则退自包含 SVG）。配置 `MUSIC_CARD_BASE` 后，`song_share` / `lyric_share` 会附上这行图片 markdown，AI 原样贴进回复即可。注意两点：卡片端点**免鉴权**（官端 `<img>` 带不了凭证；内容只有封面/歌名/一句歌词这类公开数据），反代放行 `/music/card` 即可；PNG 需要 `pip install pillow` 和一套中文字体（如 `fonts-noto-cjk`，或用 `MUSIC_CARD_FONT` 指定字体文件）。
 
 ### 播放器环境变量
 
