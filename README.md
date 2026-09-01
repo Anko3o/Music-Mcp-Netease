@@ -75,6 +75,21 @@ python3 server/music.py          # 默认 :9090
 
 打开 `http://localhost:9090`。
 
+### cookie 怎么拿（`MUSIC_U`）
+
+1. 电脑浏览器登录 [music.163.com](https://music.163.com)
+2. 按 `F12` 打开开发者工具 → 「应用/Application」（Firefox 叫「存储」）→ Cookies → `https://music.163.com`
+3. 找到名为 `MUSIC_U` 的那条，复制它的值（一长串字母数字），填进 `server/.netease_cred`：`MUSIC_U=粘贴到这里`
+
+> 也可以从「网络/Network」面板随便点开一个请求，在请求头 `Cookie:` 里找 `MUSIC_U=...;` 这一段（分号前为止）。
+
+**⚠️ 请像对待密码一样对待它**：
+
+- `MUSIC_U` 等于你网易云的登录凭证——拿到它的人可以直接操作你的账号（读歌单、点红心、写听歌记录都行）
+- 不要把它贴进 issue / 截图 / 聊天记录；求助时记得打码
+- 本仓库已把 `server/.netease_cred`（和自动生成的 `server/.secret`）写进 `.gitignore`，不会被 git 提交——但你自己备份服务器时也别把它同步到公开的地方
+- 它长期有效，但**修改网易云密码或在别处强制下线会使其失效**，失效了就重新登录取一枚新的
+
 ### 点歌台 MCP（AI 伴侣的那一半）
 
 ```bash
