@@ -137,8 +137,15 @@ def cover_data_uri(url):
         req = urllib.request.Request(
             u + ("?param=200y200" if "?" not in u else ""),
             headers={"Referer": "https://music.163.com", "User-Agent": "Mozilla/5.0"})
-        with urllib.request.urlopen(req, timeout=8) as r:
-            raw = r.read()
+        raw = b""
+        for _ in range(2):  # netease CDN is occasionally flaky; one retry before giving up
+            try:
+                with urllib.request.urlopen(req, timeout=8) as r:
+                    raw = r.read()
+                if raw:
+                    break
+            except Exception:
+                pass
         if not raw or len(raw) > 300_000:
             return u
         # 按文件头认格式：网易的 ?param 缩图实测吐 PNG，别嘴上说 jpeg
