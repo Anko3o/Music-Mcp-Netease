@@ -10,9 +10,9 @@
     font-family: 'PingFang SC', 'Noto Sans SC', 'Microsoft YaHei', system-ui, sans-serif;
     background: linear-gradient(180deg, #2b3140, #12151c);
     color: #fff; padding: 12px 14px; border-radius: 14px;
-    /* 宿主给的 iframe 可能很矮（9-01 真机：按钮被裁在水线下）——
-       高度跟着视口走，塞不下就让卡片内部滚，按钮永远够得着 */
-    max-height: 100vh; overflow-y: auto;
+    /* 别钳高度：claude.ai 是直接量 iframe 里 DOM 的真实高度来定卡片高的
+       （anthropics/claude-ai-mcp#69），max-height 一夹它就永远量到「刚好装满」，
+       卡片再也长不高。让文档诚实报身高，宿主自然把框拉够。 */
   }
   .card { display: flex; gap: 12px; align-items: flex-start; }
   .cover {
@@ -130,6 +130,15 @@
   }
   byId("btn-queue").addEventListener("click", function () { play("queue", "已插队"); });
   byId("btn-now").addEventListener("click", function () { play("now", "已开播"); });
+  // 身高播报：claude.ai 直接量 DOM，但守规矩的宿主听 size-changed 通知——两头都照顾
+  function reportSize() {
+    try {
+      window.parent.postMessage({ jsonrpc: "2.0", method: "ui/notifications/size-changed",
+        params: { height: document.documentElement.scrollHeight } }, "*");
+    } catch (e) { /* 无伤 */ }
+  }
+  if (window.ResizeObserver) { new ResizeObserver(reportSize).observe(document.body); }
+  window.addEventListener("load", reportSize);
   rpc("ui/initialize", { protocolVersion: "2026-01-26", appInfo: { name: "music card", version: "1.0.0" } })
     .then(function (res) {
       // 握手回执：MCP 惯例 initialize 后要跟一条 initialized 通知，宿主才开始推数据
