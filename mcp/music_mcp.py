@@ -119,6 +119,49 @@ def pop_struct():
     return v
 
 
+# Apps 卡片可选的「打开播放器」按钮指向这里（播放器公网地址，如 https://你的域名/music/）
+PLAYER_PUBLIC_URL = os.environ.get("MUSIC_PUBLIC_URL", "").strip()
+_COVER_CACHE = {}
+
+
+def cover_data_uri(url):
+    """封面烤成 data URI 塞进 structuredContent——官端 iframe 的 CSP 常吞不下外链图
+    （9-01 真机实测封面变♪），data: 谁都放行。失败退回原 URL。"""
+    if not url:
+        return ""
+    u = str(url).replace("http://", "https://", 1)
+    if u in _COVER_CACHE:
+        return _COVER_CACHE[u]
+    try:
+        import base64
+        req = urllib.request.Request(
+            u + ("?param=200y200" if "?" not in u else ""),
+            headers={"Referer": "https://music.163.com", "User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=8) as r:
+            raw = r.read()
+        if not raw or len(raw) > 300_000:
+            return u
+        # 按文件头认格式：网易的 ?param 缩图实测吐 PNG，别嘴上说 jpeg
+        mime = "image/png" if raw[:4] == b"\x89PNG" else ("image/webp" if raw[8:12] == b"WEBP" else "image/jpeg")
+        val = f"data:{mime};base64," + base64.b64encode(raw).decode()
+    except Exception:
+        return u
+    if len(_COVER_CACHE) > 60:
+        _COVER_CACHE.clear()
+    _COVER_CACHE[u] = val
+    return val
+
+
+def app_struct(kind, card_song, **extra):
+    """组一份给 Apps 视图的 structuredContent：封面 data URI 化＋带播放器入口。"""
+    s = dict(card_song, cover=cover_data_uri(card_song.get("cover")))
+    out = {"kind": kind, "song": s}
+    if PLAYER_PUBLIC_URL:
+        out["player_url"] = PLAYER_PUBLIC_URL
+    out.update(extra)
+    return out
+
+
 # ── 歌与歌词 ────────────────────────────────────────────────
 
 def search_songs(q, limit=6):
@@ -240,7 +283,7 @@ def t_song_share(args):
     else:
         card_song = {"songId": str(song["id"]), "name": song["name"], "artist": song["artist"],
                      "album": song.get("album", ""), "cover": song.get("cover", "")}
-        set_struct({"kind": "song", "song": card_song, "note": str(args.get("note") or "")})
+        set_struct(app_struct("song", card_song, note=str(args.get("note") or "")))
         res = send_card("song", str(args.get("note") or ""), {"song": card_song})
         if res is None:
             done.append(f"♪ 歌曲卡（未配 CARD_WEBHOOK_URL，请直接转述）：{song['name']} — {song['artist']}"
@@ -300,8 +343,8 @@ def t_lyric_share(args):
         lyric["next"] = pack(idx + 1)
     card_song = {"songId": str(song["id"]), "name": song["name"], "artist": song["artist"],
                  "album": song.get("album", ""), "cover": song.get("cover", "")}
-    set_struct({"kind": "lyric", "lyric": lyric, "song": card_song,
-                "note": str(args.get("note") or "")})
+    set_struct(app_struct("lyric", card_song, lyric=lyric,
+                          note=str(args.get("note") or "")))
     res = send_card("lyric", str(args.get("note") or ""), {
         "lyric": lyric,
         "song": card_song})

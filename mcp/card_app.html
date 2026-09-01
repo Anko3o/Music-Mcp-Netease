@@ -49,6 +49,7 @@
     <div class="btns">
       <button id="btn-queue">⏯ 插进接下来播</button>
       <button id="btn-now">▶ 立刻开播</button>
+      <button id="btn-player" hidden>🎧 打开播放器</button>
     </div>
     <div class="status" id="status"></div>
   </div>
@@ -102,6 +103,11 @@
       lineEl.hidden = false;
     }
     if (sc.note) { byId("note").textContent = sc.note; byId("note").hidden = false; }
+    if (sc.player_url) {
+      var pb = byId("btn-player");
+      pb.hidden = false;
+      pb.onclick = function () { rpc("ui/open-link", { url: sc.player_url }); };
+    }
   }
   function play(mode, label) {
     if (!song) { byId("status").textContent = "还没拿到歌曲信息…"; return; }
@@ -120,8 +126,12 @@
   byId("btn-now").addEventListener("click", function () { play("now", "已开播"); });
   rpc("ui/initialize", { protocolVersion: "2026-01-26", appInfo: { name: "music card", version: "1.0.0" } })
     .then(function (res) {
-      // 宿主可能把触发本视图的工具结果直接塞在 initialize 结果里
-      if (res && res.toolResult && res.toolResult.structuredContent) render(res.toolResult.structuredContent);
+      // 握手回执：MCP 惯例 initialize 后要跟一条 initialized 通知，宿主才开始推数据
+      // （9-01 真机首测：漏了这条，卡片渲染成空壳「…」）
+      window.parent.postMessage({ jsonrpc: "2.0", method: "ui/notifications/initialized" }, "*");
+      // 有的宿主把触发本视图的工具结果直接塞在 initialize 结果里
+      var tr = res && (res.toolResult || res.result);
+      if (tr && tr.structuredContent) render(tr.structuredContent);
     })
     .catch(function () { /* 不支持也不至于白屏：等 tool-result 通知 */ });
 })();

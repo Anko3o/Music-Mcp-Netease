@@ -130,6 +130,7 @@ MCP 环境变量：
 | `CARD_WEBHOOK_URL` | 无 | 可选：聊天系统的收卡接口，歌曲卡/歌词卡 POST 到这里由你的前端渲染；不配则以文字返回、AI 直接转述 |
 | `CARD_WEBHOOK_SECRET` | 无 | 可选：随收卡 POST 附 `Authorization: Bearer` |
 | `MUSIC_CARD_BASE` | 无 | 可选：播放器的**公网**地址（如 `https://你的域名`）。配上后分享工具会多返回一行 markdown 卡片图，接 claude.ai / ChatGPT 官端连接器时聊天窗直接渲染出歌曲卡（见下） |
+| `MUSIC_PUBLIC_URL` | 无 | 可选：播放器页面的公网入口（如 `https://你的域名/music/`）。配上后 MCP Apps 交互卡片会多一个「🎧 打开播放器」按钮 |
 
 #### 接官端（claude.ai / ChatGPT）时的卡片
 
