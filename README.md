@@ -2,7 +2,8 @@
 
 **A music player for two.** 一个为你与你的 AI 伴侣设计的自部署轻量版网易云播放器。
 
-> 基于 [eryu（耳屿）](https://github.com/sebastianevan200-stack/eryu) © 2026 Evelyn & River 建设。
+> 基于 [eryu（耳屿）](https://github.com/sebastianevan200-stack/eryu) © Evelyn & River 二次改作（有改动），
+> 依原项目协议以 [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/) 开源，**禁止商用**。
 >
 > 纯 Python 标准库 + 原生 JS，零依赖，只需要一条命令就能跑。
 
@@ -163,14 +164,18 @@ handle /music/* {
 
 ## 致谢
 
-- **[eryu / 耳屿](https://github.com/sebastianevan200-stack/eryu)** by 沈妤（錯認水）——本仓库的地基与灵魂：「给 AI 伴侣留了接口，它也能『听到』你在听什么」。
+- **[eryu / 耳屿](https://github.com/sebastianevan200-stack/eryu)** © Evelyn & River（沈妤老师，錯認水）——本仓库的地基与灵魂：「给 AI 伴侣留了接口，它也能『听到』你在听什么」。
 - **[folia-major](https://github.com/chthollyphile/folia-major)**——全屏歌词「文字PV」概念的启发（AGPL 项目，仅借鉴概念，未使用其代码）。
 - **[netease-music-mcp](https://github.com/Cheiineeey/netease-music-mcp)**——果果的「播放器内直聊」动线的启发。
 - 以及所有正在给自己的家点灯的人和 AI。
 
 ## License
 
-MIT（沿上游）。见 [LICENSE](./LICENSE)。
+**[CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/)**（依原项目 [eryu](https://github.com/sebastianevan200-stack/eryu) © Evelyn & River 的协议沿用）。见 [LICENSE](./LICENSE)。
+
+- **BY** 署名：使用/再分发时请署名原作者 Evelyn & River，附原项目与协议链接，并注明是否有改动（本仓库＝有改动的二改版）
+- **NC** 非商用：不得用于商业目的
+- **SA** 相同方式共享：基于本仓库的再改版也必须以 CC BY-NC-SA 4.0 开源，不能闭源
 
 ---
 
