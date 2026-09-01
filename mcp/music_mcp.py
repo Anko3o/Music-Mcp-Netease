@@ -40,6 +40,10 @@ SIGN_AS = os.environ.get("MCP_SIGN_AS", "ai")
 TZ_OFFSET = float(os.environ.get("MUSIC_TZ_OFFSET", "8"))
 CARD_WEBHOOK_URL = os.environ.get("CARD_WEBHOOK_URL", "").strip()
 CARD_WEBHOOK_SECRET = os.environ.get("CARD_WEBHOOK_SECRET", "").strip()
+# 官端卡片图：配上播放器的公网地址（如 https://你的域名），分享工具会多返回一行
+# markdown 图片（服务端现画的歌曲卡 PNG/SVG），AI 原样贴进回复，claude.ai/ChatGPT
+# 的聊天窗就能渲染出卡片。要求 /music/card 公网可达且免鉴权（见 README）。
+CARD_IMAGE_BASE = os.environ.get("MUSIC_CARD_BASE", "").rstrip("/")
 
 
 def log(*a):
@@ -78,6 +82,18 @@ def send_card(kind, text, extra):
     if CARD_WEBHOOK_SECRET:
         hdr["Authorization"] = f"Bearer {CARD_WEBHOOK_SECRET}"
     return http_json(CARD_WEBHOOK_URL, body, hdr, "POST")
+
+
+def card_image_md(song, line=""):
+    """官端卡片图：配了 MUSIC_CARD_BASE 时返回一行 markdown 图片让 AI 原样贴进回复。"""
+    if not CARD_IMAGE_BASE:
+        return None
+    q = {"id": str(song["id"])}
+    if line:
+        q["line"] = line[:60]
+    url = f"{CARD_IMAGE_BASE}/music/card?{urllib.parse.urlencode(q)}"
+    return ("🖼 卡片图（请把下面这行 markdown 原样贴进你的回复，聊天窗会渲染成卡片）：\n"
+            f"![♪ {song['name']} — {song['artist']}]({url})")
 
 
 # ── 歌与歌词 ────────────────────────────────────────────────
@@ -195,6 +211,9 @@ def t_song_share(args):
         if res is None:
             done.append(f"♪ 歌曲卡（未配 CARD_WEBHOOK_URL，请直接转述）：{song['name']} — {song['artist']}"
                         + (f" · {song['album']}" if song.get("album") else "") + f"  (song_id {song['id']})")
+            md = card_image_md(song)
+            if md:
+                done.append(md)
         else:
             done.append(f"♪ 歌曲卡已发：{song['name']} — {song['artist']}")
     return "\n".join(done)
@@ -253,6 +272,9 @@ def t_lyric_share(args):
     if res is None:
         out.append(f"🎧 歌词卡（未配 CARD_WEBHOOK_URL，请直接转述）：{song['name']} {mmss(cur['time'])}「{cur['text']}」"
                    + (f"（{cur['trans']}）" if cur.get("trans") else ""))
+        md = card_image_md(song, cur["text"])
+        if md:
+            out.append(md)
     else:
         out.append(f"🎧 歌词卡已发：{song['name']} {mmss(cur['time'])}「{cur['text']}」")
         out.append("对方一点卡片就会跳进这句去听。")

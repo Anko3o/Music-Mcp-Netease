@@ -129,6 +129,11 @@ MCP 环境变量：
 | `MUSIC_TZ_OFFSET` | `8` | 展示时间的时区偏移（小时） |
 | `CARD_WEBHOOK_URL` | 无 | 可选：聊天系统的收卡接口，歌曲卡/歌词卡 POST 到这里由你的前端渲染；不配则以文字返回、AI 直接转述 |
 | `CARD_WEBHOOK_SECRET` | 无 | 可选：随收卡 POST 附 `Authorization: Bearer` |
+| `MUSIC_CARD_BASE` | 无 | 可选：播放器的**公网**地址（如 `https://你的域名`）。配上后分享工具会多返回一行 markdown 卡片图，接 claude.ai / ChatGPT 官端连接器时聊天窗直接渲染出歌曲卡（见下） |
+
+#### 接官端（claude.ai / ChatGPT）时的卡片
+
+官端聊天窗不渲染自定义组件，但渲染 markdown 图片——所以 server 提供 `GET /music/card?id=&line=`：现画一张 900×300 的歌曲卡（封面取色渐变底＋歌名/歌手/一句歌词；有 Pillow＋CJK 字体出 PNG，没有则退自包含 SVG）。配置 `MUSIC_CARD_BASE` 后，`song_share` / `lyric_share` 会附上这行图片 markdown，AI 原样贴进回复即可。注意两点：卡片端点**免鉴权**（官端 `<img>` 带不了凭证；内容只有封面/歌名/一句歌词这类公开数据），反代放行 `/music/card` 即可；PNG 需要 `pip install pillow` 和一套中文字体（如 `fonts-noto-cjk`，或用 `MUSIC_CARD_FONT` 指定字体文件）。
 
 ### 播放器环境变量
 
@@ -171,6 +176,7 @@ handle /music/* {
 | `POST /music/netease/scrobble` | 听歌记账上报：把播放时长/次数写回你的网易云（听歌量、年度报告都认账） |
 | `GET /music/netease/record?type=0\|1` | 听歌排行拉取（单曲累计次数，0 总榜 / 1 周榜） |
 | `GET /music/cover?url=` | 封面同源代理（canvas 取色用） |
+| `GET /music/card?id=&line=` | 歌曲卡图（PNG/SVG，免鉴权，给官端聊天窗当 markdown 图片） |
 | `POST /music/memory` `action:"note"` | 手写批注（追加式） |
 
 ## 数据与隐私

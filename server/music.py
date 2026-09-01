@@ -372,6 +372,13 @@ class MusicHandler(BaseHTTPRequestHandler):
             self._serve_static(path)
             return
 
+        # Card image: intentionally unauthenticated — the content is public Netease data
+        # (cover/title/one lyric line), and chat-app <img> tags can't carry credentials.
+        # See _handle_music_card.
+        if path == "/music/card":
+            self._handle_music_card()
+            return
+
         # All /music/* endpoints below require auth
         if not self._require_auth():
             return
@@ -925,6 +932,184 @@ class MusicHandler(BaseHTTPRequestHandler):
         self.send_header("Cache-Control", "public, max-age=86400")
         self.end_headers()
         self.wfile.write(data)
+
+    # ── Card image ──
+    #    GET /music/card?id=&line= → renders a 900×300 song card on the fly: PNG when
+    #    Pillow + a CJK font are available, otherwise a self-contained SVG (cover inlined
+    #    as base64). Meant to be pasted as a markdown image into chat apps (claude.ai /
+    #    ChatGPT connectors) that render images but not custom components.
+
+    CARD_LINE_MAX = 60
+
+    def _handle_music_card(self):
+        import hashlib
+        qs = parse_qs(urlparse(self.path).query)
+        song_id = qs.get("id", [""])[0]
+        if not song_id.isdigit():
+            self._send_json(400, {"error": "missing or bad id"})
+            return
+        line = qs.get("line", [""])[0]
+        # Some clients put raw UTF-8 in the URL without percent-encoding; the request
+        # line is decoded as latin-1, so try to recover. Leave as-is if it round-trips badly.
+        try:
+            line = line.encode("latin-1").decode("utf-8")
+        except (UnicodeEncodeError, UnicodeDecodeError):
+            pass
+        line = line.strip()[: self.CARD_LINE_MAX]
+        cache_dir = self.state.data_dir / "cards"
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        key = hashlib.md5(f"{song_id}|{line}".encode()).hexdigest()[:10]
+        for ext, ctype in (("png", "image/png"), ("svg", "image/svg+xml")):
+            f = cache_dir / f"{song_id}-{key}.{ext}"
+            if f.exists():
+                self._send_card_bytes(f.read_bytes(), ctype)
+                return
+        try:
+            d = self._netease_request(f"https://music.163.com/api/song/detail?ids=[{song_id}]")
+            ds = (d.get("songs") or [{}])[0]
+            name = ds.get("name", "") or f"song {song_id}"
+            artist = ", ".join(a.get("name", "") for a in ds.get("artists", []) or [])
+            cover_url = (ds.get("album", {}) or {}).get("picUrl", "") or ""
+        except Exception:
+            name, artist, cover_url = f"song {song_id}", "", ""
+        cover = b""
+        if cover_url:
+            try:
+                u = cover_url.replace("http://", "https://", 1)
+                req = urllib.request.Request(
+                    u + ("?param=300y300" if "?" not in u else ""),
+                    headers={"Referer": "https://music.163.com", "User-Agent": "Mozilla/5.0"})
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    cover = resp.read()
+            except Exception as e:
+                logger.warning("card: cover fetch failed for %s: %r", song_id, e)
+                cover = b""
+        try:
+            data, ext, ctype = self._draw_card_png(name, artist, line, cover), "png", "image/png"
+        except Exception as e:
+            logger.info("card: PNG unavailable (%s), falling back to SVG", e)
+            data, ext, ctype = self._draw_card_svg(name, artist, line, cover), "svg", "image/svg+xml"
+        # Don't cache a card whose cover fetch failed (transient Netease hiccup) —
+        # otherwise the coverless version gets served for a week.
+        if cover or not cover_url:
+            try:
+                (cache_dir / f"{song_id}-{key}.{ext}").write_bytes(data)
+            except OSError:
+                pass
+        self._send_card_bytes(data, ctype)
+
+    def _send_card_bytes(self, data: bytes, ctype: str):
+        self.send_response(200)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Cache-Control", "public, max-age=604800")
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.end_headers()
+        self.wfile.write(data)
+
+    def _card_font(self, size: int):
+        import os
+        from PIL import ImageFont
+        candidates = [
+            os.environ.get("MUSIC_CARD_FONT", ""),
+            "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc",
+            "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+            "/usr/share/fonts/truetype/noto/NotoSansCJK-Bold.ttc",
+            "/usr/share/fonts/opentype/noto/NotoSerifCJK-Bold.ttc",
+            "/System/Library/Fonts/PingFang.ttc",
+            "C:/Windows/Fonts/msyh.ttc",
+        ]
+        for path in candidates:
+            if not path or not Path(path).exists():
+                continue
+            # .ttc collections: prefer the Simplified-Chinese face (family name has "SC")
+            for idx in range(5):
+                try:
+                    f = ImageFont.truetype(path, size, index=idx)
+                    if "SC" in "".join(f.getname()):
+                        return f
+                except Exception:
+                    break
+            try:
+                return ImageFont.truetype(path, size)
+            except Exception:
+                continue
+        raise RuntimeError("no usable CJK font (set MUSIC_CARD_FONT)")
+
+    def _draw_card_png(self, name, artist, line, cover_bytes):
+        import io
+        from PIL import Image, ImageDraw
+        W, H, PAD, CV = 900, 300, 30, 240
+        base = (46, 52, 64)
+        cover = None
+        if cover_bytes:
+            try:
+                cover = Image.open(io.BytesIO(cover_bytes)).convert("RGB").resize((CV, CV))
+                base = cover.resize((1, 1)).getpixel((0, 0))
+            except Exception:
+                cover = None
+        img = Image.new("RGB", (W, H))
+        top = tuple(int(c * 0.42) for c in base)
+        bot = tuple(int(c * 0.16) for c in base)
+        for y in range(H):
+            t = y / (H - 1)
+            img.paste(tuple(int(top[i] + (bot[i] - top[i]) * t) for i in range(3)), (0, y, W, y + 1))
+        draw = ImageDraw.Draw(img)
+        if cover is not None:
+            mask = Image.new("L", (CV, CV), 0)
+            ImageDraw.Draw(mask).rounded_rectangle((0, 0, CV - 1, CV - 1), radius=18, fill=255)
+            img.paste(cover, (PAD, PAD), mask)
+        else:
+            draw.rounded_rectangle((PAD, PAD, PAD + CV, PAD + CV), radius=18,
+                                   fill=tuple(int(c * 0.6) for c in base))
+            draw.text((PAD + CV // 2, PAD + CV // 2), "♪",
+                      font=self._card_font(90), fill=(255, 255, 255), anchor="mm")
+        tx = PAD + CV + 36
+        maxw = W - tx - PAD
+
+        def fit(text, font):
+            if draw.textlength(text, font=font) <= maxw:
+                return text
+            while text and draw.textlength(text + "…", font=font) > maxw:
+                text = text[:-1]
+            return text + "…"
+
+        f_name, f_artist, f_line, f_foot = (self._card_font(44), self._card_font(27),
+                                            self._card_font(29), self._card_font(20))
+        y = PAD + 14
+        draw.text((tx, y), fit(name, f_name), font=f_name, fill=(255, 255, 255))
+        y += 62
+        if artist:
+            draw.text((tx, y), fit(artist, f_artist), font=f_artist, fill=(197, 203, 214))
+            y += 46
+        if line:
+            accent = tuple(min(255, int(c * 0.5 + 150)) for c in base)
+            draw.text((tx, y + 10), fit(f"「{line}」", f_line), font=f_line, fill=accent)
+        draw.text((W - PAD, H - 18), "♪ music-mcp", font=f_foot, fill=(139, 147, 162), anchor="rs")
+        out = io.BytesIO()
+        img.save(out, "PNG")
+        return out.getvalue()
+
+    def _draw_card_svg(self, name, artist, line, cover_bytes):
+        import base64
+        from xml.sax.saxutils import escape
+        if cover_bytes:
+            uri = "data:image/jpeg;base64," + base64.b64encode(cover_bytes).decode()
+            cover_el = f'<image x="30" y="30" width="240" height="240" clip-path="url(#r)" href="{uri}"/>'
+        else:
+            cover_el = ('<rect x="30" y="30" width="240" height="240" rx="18" fill="#3a4150"/>'
+                        '<text x="150" y="180" font-size="80" fill="#fff" text-anchor="middle">♪</text>')
+        fam = "font-family=\"'Noto Sans SC','PingFang SC','Microsoft YaHei',sans-serif\""
+        artist_el = f'<text x="306" y="152" font-size="27" fill="#c5cbd6" {fam}>{escape(artist)}</text>' if artist else ""
+        line_el = f'<text x="306" y="212" font-size="29" fill="#9fd0c9" {fam}>「{escape(line)}」</text>' if line else ""
+        return (f'<svg xmlns="http://www.w3.org/2000/svg" width="900" height="300" viewBox="0 0 900 300">'
+                f'<defs><clipPath id="r"><rect x="30" y="30" width="240" height="240" rx="18"/></clipPath>'
+                f'<linearGradient id="g" x1="0" y1="0" x2="0" y2="1">'
+                f'<stop offset="0" stop-color="#2b3140"/><stop offset="1" stop-color="#12151c"/></linearGradient></defs>'
+                f'<rect width="900" height="300" fill="url(#g)"/>{cover_el}'
+                f'<text x="306" y="98" font-size="44" font-weight="700" fill="#ffffff" {fam}>{escape(name)}</text>'
+                f'{artist_el}{line_el}'
+                f'<text x="870" y="278" font-size="20" fill="#8b93a2" text-anchor="end">♪ music-mcp</text></svg>').encode("utf-8")
 
     # ── MV playback ──
     #    songId → song/detail 拿 mv id → mv/detail 拿各清晰度片源。
