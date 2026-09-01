@@ -26,12 +26,16 @@
           overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .artist { font-size: 12px; color: #c5cbd6; margin-top: 2px;
             overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .line { font-size: 13px; color: #9fd0c9; margin-top: 5px; line-height: 1.45;
-          display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  /* 卡片高度已随内容自适应（宿主量 DOM 身高）——歌词句和配文不再截断，放开长 */
+  .line { font-size: 13px; color: #9fd0c9; margin-top: 5px; line-height: 1.45; }
   .line .t { color: #7d8595; font-size: 11px; margin-left: 6px; }
-  .note { font-size: 12px; color: #aeb6c4; margin-top: 4px; font-style: italic;
-          overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .note { font-size: 12px; color: #aeb6c4; margin-top: 4px; font-style: italic; }
   .note[hidden], .line[hidden], button[hidden] { display: none; }
+  .lyrics { margin-top: 8px; max-height: 190px; overflow-y: auto; font-size: 12px;
+            line-height: 1.7; color: #aeb6c4; border-top: 1px solid rgba(255,255,255,.08);
+            padding-top: 6px; scroll-behavior: smooth; }
+  .lyrics div.cur { color: #9fd0c9; font-weight: 700; }
+  .lyrics span.tr { color: #7d8595; font-size: 11px; margin-left: 6px; }
   .btns { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
   button {
     font: inherit; font-size: 12px; color: #fff; cursor: pointer;
@@ -56,10 +60,12 @@
       <button id="btn-queue">⏯ 插进接下来播</button>
       <button id="btn-now">▶ 立刻开播</button>
       <button id="btn-player" hidden>🎧 打开播放器</button>
+      <button id="btn-lyrics" hidden>📜 歌词</button>
     </div>
     <div class="status" id="status"></div>
   </div>
 </div>
+<div class="lyrics" id="lyrics" hidden></div>
 <div class="foot">♪ music-mcp</div>
 <script>
 (function () {
@@ -113,6 +119,29 @@
       var pb = byId("btn-player");
       pb.hidden = false;
       pb.onclick = function () { rpc("ui/open-link", { url: sc.player_url }); };
+    }
+    // 滚动歌词（9-01 安可:「是不是能够塞一个滚动歌词呢！」）：
+    // 点「📜 歌词」展开整篇，面板内滚动；歌词卡分享的那句高亮并居中
+    if (sc.lyrics && sc.lyrics.length) {
+      var panel = byId("lyrics");
+      panel.innerHTML = "";
+      var curAt = (sc.kind === "lyric" && sc.lyric) ? sc.lyric.at : null;
+      var curEl = null;
+      sc.lyrics.forEach(function (l) {
+        if (!l.x) return;
+        var d = document.createElement("div");
+        d.appendChild(document.createTextNode(l.x));
+        if (l.tr) { var s = document.createElement("span"); s.className = "tr"; s.textContent = l.tr; d.appendChild(s); }
+        if (curAt !== null && Math.abs(l.t - curAt) < 0.5) { d.className = "cur"; curEl = d; }
+        panel.appendChild(d);
+      });
+      var lb = byId("btn-lyrics");
+      lb.hidden = false;
+      lb.onclick = function () {
+        panel.hidden = !panel.hidden;
+        lb.textContent = panel.hidden ? "📜 歌词" : "📜 收起";
+        if (!panel.hidden && curEl) curEl.scrollIntoView({ block: "center" });
+      };
     }
   }
   function play(mode, label) {

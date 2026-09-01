@@ -138,7 +138,7 @@ def cover_data_uri(url):
             u + ("?param=200y200" if "?" not in u else ""),
             headers={"Referer": "https://music.163.com", "User-Agent": "Mozilla/5.0"})
         raw = b""
-        for _ in range(2):  # netease CDN is occasionally flaky; one retry before giving up
+        for attempt in range(3):  # netease CDN is occasionally flaky; spaced retries
             try:
                 with urllib.request.urlopen(req, timeout=8) as r:
                     raw = r.read()
@@ -146,6 +146,9 @@ def cover_data_uri(url):
                     break
             except Exception:
                 pass
+            if attempt < 2:
+                import time
+                time.sleep(0.3)
         if not raw or len(raw) > 300_000:
             return u
         # 按文件头认格式：网易的 ?param 缩图实测吐 PNG，别嘴上说 jpeg
@@ -290,7 +293,17 @@ def t_song_share(args):
     else:
         card_song = {"songId": str(song["id"]), "name": song["name"], "artist": song["artist"],
                      "album": song.get("album", ""), "cover": song.get("cover", "")}
-        set_struct(app_struct("song", card_song, note=str(args.get("note") or "")))
+        lyrics = []
+        try:  # 整篇歌词也塞给 Apps 卡片（滚动歌词面板）；拿不到不碍事
+            ld = music_get("/music/lyric", id=song["id"])
+            ls = parse_lrc(ld.get("lrc") or "")
+            ltr = {round(t["time"] * 100): t["text"] for t in parse_lrc(ld.get("tlyric") or "")}
+            lyrics = [dict({"t": l["time"], "x": l["text"]},
+                           **({"tr": ltr[round(l["time"] * 100)]} if round(l["time"] * 100) in ltr else {}))
+                      for l in ls][:400]
+        except Exception:
+            pass
+        set_struct(app_struct("song", card_song, note=str(args.get("note") or ""), lyrics=lyrics))
         res = send_card("song", str(args.get("note") or ""), {"song": card_song})
         if res is None:
             done.append(f"♪ 歌曲卡（未配 CARD_WEBHOOK_URL，请直接转述）：{song['name']} — {song['artist']}"
@@ -350,7 +363,10 @@ def t_lyric_share(args):
         lyric["next"] = pack(idx + 1)
     card_song = {"songId": str(song["id"]), "name": song["name"], "artist": song["artist"],
                  "album": song.get("album", ""), "cover": song.get("cover", "")}
-    set_struct(app_struct("lyric", card_song, lyric=lyric,
+    all_lines = [dict({"t": l["time"], "x": l["text"]},
+                      **({"tr": trans[round(l["time"] * 100)]} if round(l["time"] * 100) in trans else {}))
+                 for l in lines][:400]
+    set_struct(app_struct("lyric", card_song, lyric=lyric, lyrics=all_lines,
                           note=str(args.get("note") or "")))
     res = send_card("lyric", str(args.get("note") or ""), {
         "lyric": lyric,
