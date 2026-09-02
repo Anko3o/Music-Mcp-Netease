@@ -3577,8 +3577,13 @@ async function pollRemote() {
       if (raw.mode === 'now' || !(state.song && (state.playing || state.queue.length))) {
         // diange --now 或播放器闲着:立刻开播
                 showToast(`点播的「${song.name}」来了,现在就放~`);
-        loadAndPlay(song);
-        if (raw.at > 0) seekWhenReady(Number(raw.at));   // 9-02：官端卡片点歌词句 → 从那句开始放
+        if (raw.at > 0 && state.song && String(state.song.songId) === String(song.songId) && audio.src) {
+          try { audio.currentTime = Number(raw.at); } catch (_) {}      // same song already loaded: just move the needle
+          audio.play().catch(() => {});
+        } else {
+          loadAndPlay(song);
+          if (raw.at > 0) seekWhenReady(Number(raw.at));
+        }   // 9-02：官端卡片点歌词句 → 从那句开始放
         } else {
           state.queue.push(song);
                 showToast(`「${song.name}」插进队列了,点 ▤ 看`);
@@ -3587,7 +3592,7 @@ async function pollRemote() {
     renderNpBar(); renderQueue();
   } catch {}
 }
-setInterval(() => { if (!document.hidden) pollRemote(); }, 3000);   // foreground: timer; background: driven by timeupdate
+setInterval(() => { if (!document.hidden) pollRemote(); }, 1000);   // foreground 1s: card clicks should feel instant   // foreground: timer; background: driven by timeupdate
 
 // ── Now-playing heartbeat ──
 //    Report playback state every 5s (kept in server memory); the MCP Apps card

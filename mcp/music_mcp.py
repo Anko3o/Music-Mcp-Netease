@@ -24,6 +24,7 @@
   { "mcpServers": { "music": { "type": "http", "url": "http://127.0.0.1:18012/mcp" } } }
 """
 import json
+import time
 import os
 import re
 import sys
@@ -212,6 +213,9 @@ def search_songs(q, limit=6):
     return (d.get("songs") or [])[:max(1, min(int(limit or 6), 10))]
 
 
+_SONG_CACHE = {}   # id -> (ts, song dict)
+
+
 def resolve_song(args):
     """query 搜第一首；或直接给 song_id(+name/artist/cover)。返回统一 dict。"""
     sid = str(args.get("song_id") or "").strip()
@@ -222,9 +226,16 @@ def resolve_song(args):
                     "album": args.get("album") or "", "cover": args.get("cover") or ""}
         # 只有 id 没有歌名：借 search 的链接识别路径拿完整元数据（歌名/歌手/封面），
         # 不然卡片和批注里全是空壳。拿不到就退回裸 id。
+        # Cache resolved metadata for 10 min so repeated card clicks don't re-query NetEase.
+        hit = _SONG_CACHE.get(sid)
+        if hit and time.time() - hit[0] < 600:
+            return dict(hit[1])
         try:
             songs = search_songs(f"https://music.163.com/song?id={sid}", 1)
             if songs and str(songs[0].get("id")) == sid:
+                _SONG_CACHE[sid] = (time.time(), songs[0])
+                if len(_SONG_CACHE) > 200:
+                    _SONG_CACHE.pop(next(iter(_SONG_CACHE)))
                 return songs[0]
         except Exception:
             pass
