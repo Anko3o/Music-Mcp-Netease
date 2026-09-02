@@ -106,7 +106,7 @@ class ToolError(Exception):
     """工具层的『没成』：抛出来由 tools/call 标 isError，回话不再靠 ❌ 前缀识别。"""
 
 # 模板 URI 同时是宿主缓存键；卡片协议/布局有破坏性更新时必须换版本。
-UI_RESOURCE_URI = "ui://music/card-v3.html"
+UI_RESOURCE_URI = "ui://music/card-v4.html"
 UI_MIME = "text/html;profile=mcp-app"
 APP_HTML_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "card_app.html")
 STRUCT = threading.local()

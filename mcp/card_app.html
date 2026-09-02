@@ -11,24 +11,51 @@
     --ink: #6b4a55; --soft: #85616f; --faint: #cfb6c0;
     --line: rgba(194,112,138,.16); --line-bright: rgba(255,255,255,.9);
     --hot: #c2708a; --accent: #984e68; --btn: #d26e88;
-    --inner: rgba(255,255,255,.34); --glass-edge: rgba(255,255,255,.9);
-    --glass-shadow: rgba(214,120,170,.16); --button-glass: rgba(255,255,255,.28); }
+    --inner: rgba(255,255,255,.32); --glass-edge: rgba(255,255,255,.78);
+    --glass-top: rgba(255,255,255,.66); --glass-bottom: rgba(235,243,248,.30);
+    --glass-blue: rgba(191,213,228,.18); --glass-depth: rgba(87,107,121,.10);
+    --glass-shadow: rgba(73,91,105,.12); --button-glass: rgba(255,255,255,.26); }
   @media (prefers-color-scheme: dark) {
     :root { --paper: rgba(18,18,20,.58); --paper-fallback: #171719;
             --ink: #f5e8ee; --soft: #c9afbd; --faint: #a08b96;
             --line: rgba(242,241,237,.17); --line-bright: rgba(255,255,255,.25);
             --hot: #d999ad; --accent: #e4a4ba; --btn: #c85f7d;
-            --inner: rgba(255,231,237,.08); --glass-edge: rgba(255,255,255,.16);
-            --glass-shadow: rgba(0,0,0,.34); --button-glass: rgba(255,255,255,.07); } }
+            --inner: rgba(255,255,255,.07); --glass-edge: rgba(255,255,255,.24);
+            --glass-top: rgba(255,255,255,.14); --glass-bottom: rgba(73,89,100,.18);
+            --glass-blue: rgba(145,176,198,.12); --glass-depth: rgba(0,0,0,.24);
+            --glass-shadow: rgba(0,0,0,.24); --button-glass: rgba(255,255,255,.07); } }
   html { background: transparent; min-height: 100%; }
   * { margin: 0; box-sizing: border-box; }
   body { font-family: 'PingFang SC', 'Noto Sans SC', 'Microsoft YaHei', system-ui, sans-serif;
-    background: var(--paper); color: var(--ink); padding: 12px 14px 10px; border-radius: 16px;
+    position: relative; isolation: isolate; overflow: hidden;
+    background:
+      radial-gradient(120% 100% at 4% -12%, var(--glass-top), transparent 48%),
+      radial-gradient(95% 140% at 108% 112%, var(--glass-blue), transparent 58%),
+      linear-gradient(135deg, var(--paper), var(--glass-bottom));
+    color: var(--ink); padding: 12px 14px 10px; border-radius: 20px;
     border: 1px solid var(--glass-edge);
-    box-shadow: inset 0 1px 0 rgba(255,255,255,.34), 0 12px 32px var(--glass-shadow);
-    -webkit-backdrop-filter: blur(18px) saturate(1.35);
-    backdrop-filter: blur(18px) saturate(1.35);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.82),
+      inset 1px 0 0 rgba(255,255,255,.34),
+      inset 0 -1px 0 var(--glass-depth),
+      0 12px 30px var(--glass-shadow);
+    -webkit-backdrop-filter: blur(24px) saturate(1.28) contrast(1.03);
+    backdrop-filter: blur(24px) saturate(1.28) contrast(1.03);
     /* 别钳高度：claude.ai 直接量 iframe 里 DOM 的真实高度来定卡片高（anthropics/claude-ai-mcp#69） */ }
+  body::before {
+    content: ""; position: absolute; z-index: 0; pointer-events: none;
+    inset: 1px; border-radius: 19px;
+    background: linear-gradient(112deg, rgba(255,255,255,.22), transparent 30%, transparent 72%, rgba(182,207,224,.10));
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.10);
+  }
+  body::after {
+    content: ""; position: absolute; z-index: 0; pointer-events: none;
+    width: 44%; height: 38%; right: 5%; top: -21%;
+    border-radius: 50%;
+    background: radial-gradient(ellipse, rgba(255,255,255,.52), transparent 70%);
+    filter: blur(11px); opacity: .52; transform: rotate(-8deg);
+  }
+  body > * { position: relative; z-index: 1; }
   .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 9px; letter-spacing: .22em; text-transform: uppercase; color: var(--faint); }
   .fig { display: flex; justify-content: space-between; align-items: baseline; padding-bottom: 8px; margin-bottom: 10px; border-bottom: 1px solid var(--line-bright); }
   .fig i { font-style: normal; color: var(--hot); }
@@ -76,15 +103,19 @@
     --ink: #6b4a55; --soft: #85616f; --faint: #cfb6c0;
     --line: rgba(194,112,138,.16); --line-bright: rgba(255,255,255,.9);
     --hot: #c2708a; --accent: #984e68; --btn: #d26e88;
-    --inner: rgba(255,255,255,.34); --glass-edge: rgba(255,255,255,.9);
-    --glass-shadow: rgba(214,120,170,.16); --button-glass: rgba(255,255,255,.28);
+    --inner: rgba(255,255,255,.32); --glass-edge: rgba(255,255,255,.78);
+    --glass-top: rgba(255,255,255,.66); --glass-bottom: rgba(235,243,248,.30);
+    --glass-blue: rgba(191,213,228,.18); --glass-depth: rgba(87,107,121,.10);
+    --glass-shadow: rgba(73,91,105,.12); --button-glass: rgba(255,255,255,.26);
   }
   html.host-openai[data-openai-theme="dark"] {
     --paper: rgba(18,18,20,.58); --paper-fallback: #171719;
     --ink: #f5e8ee; --soft: #c9afbd; --faint: #a08b96;
     --line: rgba(242,241,237,.17); --line-bright: rgba(255,255,255,.25);
     --hot: #d999ad; --accent: #e4a4ba; --btn: #c85f7d; --inner: rgba(255,231,237,.08);
-    --glass-edge: rgba(255,255,255,.16); --glass-shadow: rgba(0,0,0,.34);
+    --glass-edge: rgba(255,255,255,.24); --glass-top: rgba(255,255,255,.14);
+    --glass-bottom: rgba(73,89,100,.18); --glass-blue: rgba(145,176,198,.12);
+    --glass-depth: rgba(0,0,0,.24); --glass-shadow: rgba(0,0,0,.24);
     --button-glass: rgba(255,255,255,.07);
   }
   html.host-openai body {

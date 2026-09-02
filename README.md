@@ -136,7 +136,7 @@ MCP 环境变量：
 
 两条路，各自独立可用：
 
-**① MCP Apps（真·交互卡片）**：本 MCP 实现了官方 [MCP Apps 扩展](https://apps.extensions.modelcontextprotocol.io/)（`io.modelcontextprotocol/ui`，2026-01-26 规范）——`song_share` / `lyric_share` 挂了版本化的 `ui://music/card-v3.html` 模板（[`mcp/card_app.html`](./mcp/card_app.html)，零依赖手搓）。支持 Apps 的宿主（claude.ai 网页/桌面、ChatGPT、Goose、VS Code 等）会把分享结果渲染成**可点的卡片**。Claude 与 ChatGPT 共用同一套透明奶白毛玻璃、内容层级和四个操作；玻璃本体不染粉，浅粉只用于细线、阴影和主按钮，颜色直接取自音乐页。支持背景模糊的宿主使用 `backdrop-filter`，其余宿主自动退成半透明磨砂底。ChatGPT 只额外适配宿主主题、安全区与 iframe 高度，不另维护一套排版。不支持 Apps 的宿主自动退回纯文字，互不打扰，无需配置。
+**① MCP Apps（真·交互卡片）**：本 MCP 实现了官方 [MCP Apps 扩展](https://apps.extensions.modelcontextprotocol.io/)（`io.modelcontextprotocol/ui`，2026-01-26 规范）——`song_share` / `lyric_share` 挂了版本化的 `ui://music/card-v4.html` 模板（[`mcp/card_app.html`](./mcp/card_app.html)，零依赖手搓）。支持 Apps 的宿主（claude.ai 网页/桌面、ChatGPT、Goose、VS Code 等）会把分享结果渲染成**可点的卡片**。Claude 与 ChatGPT 共用同一套透明奶白毛玻璃、内容层级和四个操作；玻璃本体不染粉，以雾白和半透明蓝灰叠出折射层，浅粉只用于细线和主按钮。支持背景模糊的宿主使用 `backdrop-filter`，并加极细高光边、内侧厚度暗边、顶部柔光斑和轻悬浮阴影；其余宿主自动退成可读的半透明磨砂底。ChatGPT 只额外适配宿主主题、安全区与 iframe 高度，不另维护一套排版。不支持 Apps 的宿主自动退回纯文字，互不打扰，无需配置。
 
 **② 卡片图（markdown 图片，兜底）**：官端聊天窗不渲染自定义组件，但渲染 markdown 图片——所以 server 提供 `GET /music/card?id=&line=`：现画一张 900×300 的歌曲卡（封面取色渐变底＋歌名/歌手/一句歌词；有 Pillow＋CJK 字体出 PNG，没有则退自包含 SVG）。配置 `MUSIC_CARD_BASE` 后，`song_share` / `lyric_share` 会附上这行图片 markdown，AI 原样贴进回复即可。注意两点：卡片端点**免鉴权**（官端 `<img>` 带不了凭证；内容只有封面/歌名/一句歌词这类公开数据），反代放行 `/music/card` 即可；PNG 需要 `pip install pillow` 和一套中文字体（如 `fonts-noto-cjk`，或用 `MUSIC_CARD_FONT` 指定字体文件）。
 
