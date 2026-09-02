@@ -132,15 +132,15 @@ MCP 环境变量：
 | `MUSIC_CARD_BASE` | 无 | 可选：播放器的**公网**地址（如 `https://你的域名`）。配上后分享工具会多返回一行 markdown 卡片图，接 claude.ai / ChatGPT 官端连接器时聊天窗直接渲染出歌曲卡（见下） |
 | `MUSIC_PUBLIC_URL` | 无 | 可选：播放器页面的公网入口（如 `https://你的域名/music/`）。配上后 MCP Apps 交互卡片会多一个「🎧 打开播放器」按钮 |
 
-#### 接官端（claude.ai / ChatGPT）时的卡片
+#### 官端里的两种卡片
 
 两条路，各自独立可用：
 
-**① MCP Apps（真·交互卡片）**：本 MCP 实现了官方 [MCP Apps 扩展](https://apps.extensions.modelcontextprotocol.io/)（`io.modelcontextprotocol/ui`，2026-01-26 规范）——`song_share` / `lyric_share` 挂了 `ui://music/card.html` 模板（[`mcp/card_app.html`](./mcp/card_app.html)，零依赖手搓）。支持 Apps 的宿主（claude.ai 网页/桌面、ChatGPT、Goose、VS Code 等）会把分享结果渲染成**可点的卡片**：封面＋歌名＋歌词句，还有「插进接下来播 / 立刻开播」两个按钮直接反控播放器。不支持 Apps 的宿主自动退回纯文字，互不打扰，无需配置。
+**① MCP Apps（真·交互卡片）**：本 MCP 实现了官方 [MCP Apps 扩展](https://apps.extensions.modelcontextprotocol.io/)（`io.modelcontextprotocol/ui`，2026-01-26 规范）——`song_share` / `lyric_share` 挂了 `ui://music/card.html` 模板（[`mcp/card_app.html`](./mcp/card_app.html)，零依赖手搓）。支持 Apps 的宿主（claude.ai 网页/桌面、ChatGPT、Goose、VS Code 等）会把分享结果渲染成**可点的卡片**。模板共用同一份数据与操作，并会自动适配宿主：Claude 保留图纸玻璃、歌词展开和四个操作；ChatGPT 检测到 `window.openai` 扩展后换成紧凑 inline 卡，只保留「接下来播 / 立即播放」两个主要操作。不支持 Apps 的宿主自动退回纯文字，互不打扰，无需配置。
 
 **② 卡片图（markdown 图片，兜底）**：官端聊天窗不渲染自定义组件，但渲染 markdown 图片——所以 server 提供 `GET /music/card?id=&line=`：现画一张 900×300 的歌曲卡（封面取色渐变底＋歌名/歌手/一句歌词；有 Pillow＋CJK 字体出 PNG，没有则退自包含 SVG）。配置 `MUSIC_CARD_BASE` 后，`song_share` / `lyric_share` 会附上这行图片 markdown，AI 原样贴进回复即可。注意两点：卡片端点**免鉴权**（官端 `<img>` 带不了凭证；内容只有封面/歌名/一句歌词这类公开数据），反代放行 `/music/card` 即可；PNG 需要 `pip install pillow` 和一套中文字体（如 `fonts-noto-cjk`，或用 `MUSIC_CARD_FONT` 指定字体文件）。
 
-### 接入 claude.ai / Claude app（自定义连接器）
+### 接入 Claude 系：Claude Code / Claude App
 
 这一节是「把点歌台挂进官方 Claude」的完整步骤。做完以后，在 claude.ai 网页、桌面端和手机 app 里都能直接让 Claude 搜歌、发歌曲卡/歌词卡、往你的播放器里插歌，卡片是可点的（MCP Apps）。
 
@@ -204,10 +204,67 @@ curl -i https://你的域名/mcp-music-<随机串>/mcp
 | 「打开播放器」按钮不见了 | 没配 `MUSIC_PUBLIC_URL` | 配上并重启 MCP |
 | 用 curl 验门回 401 | 站点整体挂了 basic auth，把这条路径也拦了 | 把 `/mcp-music-<随机串>/*` 这条 `handle` 放在 basic auth 之前，或单独排除 |
 
-**5. 其他宿主**
+**5. Claude Code**
 
-- **Claude Code / Codex CLI**：本机直连即可，`.mcp.json` 写 `http://127.0.0.1:18012/mcp`（见上文）；Codex 在 `~/.codex/config.toml` 的 `[mcp_servers.music]` 里填同一个地址。
-- **ChatGPT**：走「连接器 → 自定义 MCP」，同样填上面那个 HTTPS 地址，工具可用；卡片是 OpenAI 自家的 Apps SDK 规范，和 MCP Apps 不通用，目前在 ChatGPT 里只出文字。
+Claude Code 在本机可以直接连接 `http://127.0.0.1:18012/mcp`，写进 `.mcp.json` 即可；不用绕公网域名。
+
+### 接入 OpenAI 系：Codex / ChatGPT App
+
+这一节只讲 OpenAI 这边，不和 Claude 的连接器步骤混在一起。ChatGPT 官端使用公网 HTTPS 地址；Codex 和点歌台跑在同一台机器时，直接连本机地址就好。
+
+**0. 准备地址**
+
+- **ChatGPT / GPT App**：使用上文反代出的 `https://你的域名/mcp-music-<随机串>/mcp`。随机串相当于密码，不要截图或提交进公开仓库。
+- **Codex**：同机使用 `http://127.0.0.1:18012/mcp`；跨机器再使用 HTTPS 地址。
+
+**1. 在 ChatGPT / GPT App 里添加**
+
+按照 OpenAI 当前的[个人插件接入步骤](https://developers.openai.com/plugins/quickstart)：
+
+1. 打开 ChatGPT → **Settings → Security and login → Developer mode**，开启开发者模式。
+2. 进入 **Plugins** 页面，点右上角的「+」。
+3. 选择添加自己的 MCP 服务，把 `https://你的域名/mcp-music-<随机串>/mcp` 粘进 URL；这套部署用 URL 随机串上锁，不需要另填 OAuth。
+4. 完成连接后回到对话，启用刚创建的 `music` 个人插件。
+
+不同版本若仍显示 **Connectors / Add custom connector**，填的也是同一个 HTTPS MCP URL；入口名字不同，服务端不用另做一份。
+
+**2. ChatGPT 里的卡片**
+
+`song_share` / `lyric_share` 会直接返回 MCP Apps 交互卡。模板检测到 ChatGPT 的 `window.openai` 后，会自动换成紧凑 inline 布局，只保留「接下来播 / 立即播放」两个主要操作，并跟随明暗主题、安全区和可用高度；不需要复制或重排第二份 HTML。Claude 仍使用上面的完整图纸玻璃卡。
+
+如果当前客户端还不渲染 MCP Apps，结果会退回文字；换到较新的 ChatGPT 网页或桌面 app 再试即可。
+
+**3. 在 Codex 里添加**
+
+最短的一条命令：
+
+```bash
+codex mcp add music --url http://127.0.0.1:18012/mcp
+```
+
+也可以按 OpenAI 的 [Codex MCP 文档](https://learn.chatgpt.com/docs/extend/mcp)直接写 `~/.codex/config.toml`：
+
+```toml
+[mcp_servers.music]
+url = "http://127.0.0.1:18012/mcp"
+```
+
+重开 Codex 会话后输入 `/mcp`，能看到 `music` 就接好了。ChatGPT 桌面 app、Codex CLI 和 IDE 扩展会共享同一台 Codex 主机上的 MCP 配置。
+
+**4. 试一句**
+
+> 帮我搜一下ヨルシカ的《夜行》，做成歌曲卡发给我。
+
+或者：
+
+> 把这首插进我的播放队列，再把副歌那句做成歌词卡。
+
+| 现象 | 怎么办 |
+|---|---|
+| ChatGPT 添加时报无法连接 | 检查 URL 末尾有没有 `/mcp`，再用上文的 curl 验反代 |
+| Codex 里看不到 `music` | 重开会话后输入 `/mcp`；确认 `config.toml` 的表名和 URL |
+| 工具能调用但只有文字 | 当前客户端尚未渲染 MCP Apps；文字是正常兜底 |
+| ChatGPT 卡片比 Claude 简洁 | 这是宿主自适应后的预期布局，不是漏渲染 |
 
 ### 播放器环境变量
 
