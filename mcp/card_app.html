@@ -49,54 +49,33 @@
   .status { font-size: 11px; color: var(--faint); margin-top: 6px; min-height: 13px; white-space: pre-line; }
   .foot { display: flex; justify-content: space-between; margin-top: 8px; padding-top: 6px; border-top: 1px solid var(--line); }
 
-  /* ChatGPT 也走同一份 MCP Apps 模板，但 inline 容器比 Claude 更窄，宿主还会
-     自己画 app 名和外框。检测到它的可选 window.openai 扩展后，只换一层紧凑皮肤：
-     标准 JSON-RPC 数据与动作仍共用，Claude 现有的图纸玻璃版不受影响。 */
+  /* ChatGPT 直接复用 Claude 已定稿的图纸玻璃卡；这里只处理宿主安全区、显式主题
+     和 iframe 收高，不再维护第二套白底排版。 */
   html.host-openai {
-    background: transparent;
-    --host-safe-left: 0px; --host-safe-right: 0px; --host-safe-bottom: 0px;
-    --paper: transparent; --ink: #242124; --soft: #686166; --faint: #8f888d;
-    --line: rgba(36,33,36,.11); --line-bright: rgba(36,33,36,.22);
-    --hot: #d92d75; --accent: #c82c69; --inner: rgba(217,45,117,.07);
+    min-height: 0;
+    background: var(--paper);
+    --host-safe-top: 0px; --host-safe-left: 0px;
+    --host-safe-right: 0px; --host-safe-bottom: 0px;
+  }
+  html.host-openai[data-openai-theme="light"] {
+    --paper: #fff5f8; --ink: #6b4a55; --soft: #85616f; --faint: #a98a97;
+    --line: rgba(152,78,104,.18); --line-bright: rgba(152,78,104,.42);
+    --hot: #e01f74; --accent: #984e68; --inner: rgba(255,255,255,.5);
   }
   html.host-openai[data-openai-theme="dark"] {
-    --ink: #f3eff1; --soft: #c8c0c4; --faint: #999196;
-    --line: rgba(255,255,255,.12); --line-bright: rgba(255,255,255,.25);
-    --hot: #ff6aa9; --accent: #e45894; --inner: rgba(255,106,169,.10);
+    --paper: #1a1218; --ink: #f5e8ee; --soft: #c9afbd; --faint: #a08b96;
+    --line: rgba(242,241,237,.17); --line-bright: rgba(242,241,237,.5);
+    --hot: #ff5fa4; --accent: #e4a4ba; --inner: rgba(255,231,237,.08);
   }
   html.host-openai body {
-    background: transparent;
-    border-radius: 0;
-    padding: 8px var(--host-safe-right) calc(2px + var(--host-safe-bottom)) var(--host-safe-left);
-    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--paper);
+    padding: calc(12px + var(--host-safe-top)) calc(14px + var(--host-safe-right))
+             calc(10px + var(--host-safe-bottom)) calc(14px + var(--host-safe-left));
   }
-  html.host-openai .fig,
-  html.host-openai .foot,
-  html.host-openai #btn-player,
-  html.host-openai #btn-lyrics,
-  html.host-openai .lyrics { display: none !important; }
-  html.host-openai .card { gap: 12px; align-items: flex-start; }
-  html.host-openai .cover { width: 72px; height: 72px; border-radius: 12px; }
-  html.host-openai .name { font-size: 15px; letter-spacing: 0; }
-  html.host-openai .artist { font-size: 12px; margin-top: 3px; }
-  html.host-openai .line {
-    font-size: 12.5px; margin-top: 6px; line-height: 1.4; padding-left: 8px;
-    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
-  }
-  html.host-openai .line[hidden] { display: none; }
-  html.host-openai .note { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  html.host-openai .btns { flex-wrap: nowrap; gap: 7px; margin-top: 8px; }
-  html.host-openai button {
-    flex: 1; min-width: 0; justify-content: center; white-space: nowrap;
-    padding: 6px 9px; border-radius: 10px;
-  }
-  html.host-openai #btn-now { background: var(--hot); border-color: var(--hot); }
-  html.host-openai .status:empty { display: none; }
-  html.host-openai .np { margin-top: 8px; }
   @media (max-width: 340px) {
-    html.host-openai .cover { width: 62px; height: 62px; }
+    html.host-openai .cover { width: 72px; height: 72px; }
     html.host-openai .card { gap: 10px; }
-    html.host-openai button { font-size: 11px; padding-inline: 7px; }
+    html.host-openai body { padding-left: calc(10px + var(--host-safe-left)); padding-right: calc(10px + var(--host-safe-right)); }
   }
 </style>
 </head>
@@ -143,18 +122,15 @@
     if (theme === "light" || theme === "dark") root.dataset.openaiTheme = theme;
     var safe = (globals && globals.safeArea) || api.safeArea || {};
     var inset = safe.insets || safe;
+    root.style.setProperty("--host-safe-top", cssPx(inset.top));
     root.style.setProperty("--host-safe-left", cssPx(inset.left));
     root.style.setProperty("--host-safe-right", cssPx(inset.right));
     root.style.setProperty("--host-safe-bottom", cssPx(inset.bottom));
-    var queueLabel = document.querySelector("#btn-queue span");
-    var nowLabel = document.querySelector("#btn-now span");
-    if (queueLabel) queueLabel.textContent = "接下来播";
-    if (nowLabel) nowLabel.textContent = "立即播放";
     return true;
   }
   applyOpenAiHost();
   window.addEventListener("openai:set_globals", function (event) {
-    applyOpenAiHost(event.detail && event.detail.globals);
+    applyOpenAiHost(event.detail && (event.detail.globals || event.detail));
     if (!song && window.openai && window.openai.toolOutput) render(window.openai.toolOutput);
     reportSize();
   });
@@ -185,6 +161,7 @@
   function byId(i) { return document.getElementById(i); }
   function mmss(t) { t = Math.max(0, Math.round(t)); return Math.floor(t / 60) + ":" + String(t % 60).padStart(2, "0"); }
   function render(sc) {
+    sc = sc && (sc.structuredContent || (sc.result && sc.result.structuredContent) || sc);
     if (!sc || !sc.song) return;
     song = sc.song;
     byId("fig-kind").textContent = sc.kind === "lyric" ? "LYRIC CARD" : "SONG CARD";
@@ -301,7 +278,7 @@
   // 身高播报：claude.ai 直接量 DOM，但守规矩的宿主听 size-changed 通知——两头都照顾
   function reportSize() {
     try {
-      var height = Math.ceil(document.documentElement.scrollHeight);
+      var height = Math.ceil(Math.max(document.body.scrollHeight, document.body.getBoundingClientRect().height));
       window.parent.postMessage({ jsonrpc: "2.0", method: "ui/notifications/size-changed",
         params: { height: height } }, "*");
       if (window.openai && typeof window.openai.notifyIntrinsicHeight === "function") {

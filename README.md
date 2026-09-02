@@ -136,7 +136,7 @@ MCP 环境变量：
 
 两条路，各自独立可用：
 
-**① MCP Apps（真·交互卡片）**：本 MCP 实现了官方 [MCP Apps 扩展](https://apps.extensions.modelcontextprotocol.io/)（`io.modelcontextprotocol/ui`，2026-01-26 规范）——`song_share` / `lyric_share` 挂了 `ui://music/card.html` 模板（[`mcp/card_app.html`](./mcp/card_app.html)，零依赖手搓）。支持 Apps 的宿主（claude.ai 网页/桌面、ChatGPT、Goose、VS Code 等）会把分享结果渲染成**可点的卡片**。模板共用同一份数据与操作，并会自动适配宿主：Claude 保留图纸玻璃、歌词展开和四个操作；ChatGPT 检测到 `window.openai` 扩展后换成紧凑 inline 卡，只保留「接下来播 / 立即播放」两个主要操作。不支持 Apps 的宿主自动退回纯文字，互不打扰，无需配置。
+**① MCP Apps（真·交互卡片）**：本 MCP 实现了官方 [MCP Apps 扩展](https://apps.extensions.modelcontextprotocol.io/)（`io.modelcontextprotocol/ui`，2026-01-26 规范）——`song_share` / `lyric_share` 挂了版本化的 `ui://music/card-v2.html` 模板（[`mcp/card_app.html`](./mcp/card_app.html)，零依赖手搓）。支持 Apps 的宿主（claude.ai 网页/桌面、ChatGPT、Goose、VS Code 等）会把分享结果渲染成**可点的卡片**。Claude 与 ChatGPT 共用同一套粉色图纸玻璃配色、内容层级和四个操作；ChatGPT 只额外适配宿主主题、安全区与 iframe 高度，不另维护一套排版。不支持 Apps 的宿主自动退回纯文字，互不打扰，无需配置。
 
 **② 卡片图（markdown 图片，兜底）**：官端聊天窗不渲染自定义组件，但渲染 markdown 图片——所以 server 提供 `GET /music/card?id=&line=`：现画一张 900×300 的歌曲卡（封面取色渐变底＋歌名/歌手/一句歌词；有 Pillow＋CJK 字体出 PNG，没有则退自包含 SVG）。配置 `MUSIC_CARD_BASE` 后，`song_share` / `lyric_share` 会附上这行图片 markdown，AI 原样贴进回复即可。注意两点：卡片端点**免鉴权**（官端 `<img>` 带不了凭证；内容只有封面/歌名/一句歌词这类公开数据），反代放行 `/music/card` 即可；PNG 需要 `pip install pillow` 和一套中文字体（如 `fonts-noto-cjk`，或用 `MUSIC_CARD_FONT` 指定字体文件）。
 
@@ -230,7 +230,7 @@ Claude Code 在本机可以直接连接 `http://127.0.0.1:18012/mcp`，写进 `.
 
 **2. ChatGPT 里的卡片**
 
-`song_share` / `lyric_share` 会直接返回 MCP Apps 交互卡。模板检测到 ChatGPT 的 `window.openai` 后，会自动换成紧凑 inline 布局，只保留「接下来播 / 立即播放」两个主要操作，并跟随明暗主题、安全区和可用高度；不需要复制或重排第二份 HTML。Claude 仍使用上面的完整图纸玻璃卡。
+`song_share` / `lyric_share` 会直接返回 MCP Apps 交互卡。ChatGPT 与 Claude 使用同一份粉色图纸玻璃卡：封面、歌名/歌手、歌词、进度和四个操作都保留；`window.openai` 只用于跟随明暗主题、安全区和可用高度，不会切换成另一套白底布局。
 
 如果当前客户端还不渲染 MCP Apps，结果会退回文字；换到较新的 ChatGPT 网页或桌面 app 再试即可。
 
@@ -264,7 +264,7 @@ url = "http://127.0.0.1:18012/mcp"
 | ChatGPT 添加时报无法连接 | 检查 URL 末尾有没有 `/mcp`，再用上文的 curl 验反代 |
 | Codex 里看不到 `music` | 重开会话后输入 `/mcp`；确认 `config.toml` 的表名和 URL |
 | 工具能调用但只有文字 | 当前客户端尚未渲染 MCP Apps；文字是正常兜底 |
-| ChatGPT 卡片比 Claude 简洁 | 这是宿主自适应后的预期布局，不是漏渲染 |
+| ChatGPT 出现只有按钮和省略号的空壳 | 刷新个人插件后重开对话；新版模板 URI 会绕开旧缓存，后端也会为排队/立即播放返回完整歌曲数据 |
 
 ### 播放器环境变量
 

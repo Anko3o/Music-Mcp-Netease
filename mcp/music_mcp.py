@@ -105,10 +105,23 @@ def card_image_md(song, line=""):
 class ToolError(Exception):
     """工具层的『没成』：抛出来由 tools/call 标 isError，回话不再靠 ❌ 前缀识别。"""
 
-UI_RESOURCE_URI = "ui://music/card.html"
+# 模板 URI 同时是宿主缓存键；卡片协议/布局有破坏性更新时必须换版本。
+UI_RESOURCE_URI = "ui://music/card-v2.html"
 UI_MIME = "text/html;profile=mcp-app"
 APP_HTML_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "card_app.html")
 STRUCT = threading.local()
+APP_OUTPUT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "kind": {"type": "string", "enum": ["song", "lyric"]},
+        "song": {
+            "type": "object",
+            "properties": {
+                "songId": {"type": "string"}, "name": {"type": "string"},
+                "artist": {"type": "string"}, "album": {"type": "string"},
+                "cover": {"type": "string"}},
+            "required": ["songId", "name", "artist"]}},
+    "required": ["kind", "song"]}
 
 
 def set_struct(obj):
@@ -295,6 +308,8 @@ def t_song_share(args):
     song = resolve_song(args)
     mode = str(args.get("mode") or "card")
     memo = str(args.get("memo") or "").strip()
+    card_song = {"songId": str(song["id"]), "name": song["name"], "artist": song["artist"],
+                 "album": song.get("album", ""), "cover": song.get("cover", "")}
     done = []
     if memo:
         _memo(song, memo)
@@ -305,11 +320,13 @@ def t_song_share(args):
         if mode == "now":
             s["mode"] = "now"
         music_post("/music/remote", {"song": s})
+        # song_share 始终挂着卡片模板；队列/立即播放也必须给宿主完整数据，
+        # 否则 ChatGPT 会挂载一个只有按钮和省略号的空壳。
+        set_struct(app_struct("song", card_song, note=str(args.get("note") or ""),
+                              action={"mode": mode, "done": True}))
         done.append(("已递到播放器，立刻开播" if mode == "now" else "已插进「接下来播」(播放器开着 5s 内接走)")
                     + f"：{song['name']} — {song['artist']}")
     else:
-        card_song = {"songId": str(song["id"]), "name": song["name"], "artist": song["artist"],
-                     "album": song.get("album", ""), "cover": song.get("cover", "")}
         lyrics = []
         try:  # 整篇歌词也塞给 Apps 卡片（滚动歌词面板）；拿不到不碍事
             ld = music_get("/music/lyric", id=song["id"])
@@ -799,7 +816,7 @@ class H(BaseHTTPRequestHandler):
             client_pv = str((msg.get("params") or {}).get("protocolVersion") or "")
             pv = client_pv if re.match(r"^20\d{2}-\d{2}-\d{2}$", client_pv) else PROTOCOL
             r = {"protocolVersion": pv, "capabilities": {"tools": {}, "resources": {}},
-                 "serverInfo": {"name": "music", "version": "1.2.0"},
+                 "serverInfo": {"name": "music", "version": "1.3.0"},
                  "instructions": (
                      "点歌台。song_share mode=now 会打断对方正在听的，仅在明确要求立刻听时用；"
                      "默认发卡片或排队。lyric_share 的卡片可点击跳进歌曲对应段落。"
@@ -809,7 +826,12 @@ class H(BaseHTTPRequestHandler):
             for t in TOOLS:
                 if t["name"] in ("song_share", "lyric_share") and os.path.exists(APP_HTML_PATH):
                     t = dict(t)
-                    t["_meta"] = {"ui": {"resourceUri": UI_RESOURCE_URI}}
+                    t["outputSchema"] = APP_OUTPUT_SCHEMA
+                    t["_meta"] = {
+                        "ui": {"resourceUri": UI_RESOURCE_URI},
+                        "openai/outputTemplate": UI_RESOURCE_URI,
+                        "openai/toolInvocation/invoking": "正在准备歌曲卡…",
+                        "openai/toolInvocation/invoked": "歌曲卡已准备好"}
                 tools.append(t)
             r = {"tools": tools}
         elif method == "tools/call":
@@ -839,15 +861,16 @@ class H(BaseHTTPRequestHandler):
             if uri == UI_RESOURCE_URI and os.path.exists(APP_HTML_PATH):
                 with open(APP_HTML_PATH, encoding="utf-8") as f:
                     html = f.read()
+                resource_domains = ["https://p1.music.126.net", "https://p2.music.126.net",
+                                    "https://p3.music.126.net", "https://p4.music.126.net"] \
+                                   + ([CARD_IMAGE_BASE] if CARD_IMAGE_BASE else [])
                 r = {"contents": [{
                     "uri": UI_RESOURCE_URI, "mimeType": UI_MIME, "text": html,
-                    "_meta": {"ui": {
-                        # 封面直连网易图床；配了 MUSIC_CARD_BASE 也放行（备用）
-                        "csp": {"resourceDomains": ["https://p1.music.126.net", "https://p2.music.126.net",
-                                                    "https://p3.music.126.net", "https://p4.music.126.net"]
-                                                   + ([CARD_IMAGE_BASE] if CARD_IMAGE_BASE else []),
-                                "connectDomains": []},
-                        "prefersBorder": True}}}]}
+                    "_meta": {
+                        "ui": {"csp": {"resourceDomains": resource_domains, "connectDomains": []},
+                               "prefersBorder": True},
+                        "openai/widgetCSP": {"resource_domains": resource_domains, "connect_domains": []},
+                        "openai/widgetPrefersBorder": True}}]}
             elif uri == "music://now":
                 # data source for the card's progress bar: player heartbeat -> /music/now -> here
                 try:
