@@ -202,6 +202,7 @@ curl -i https://你的域名/mcp-music-<随机串>/mcp
 | 卡片出来了，封面是空的 | 封面域名不在 CSP 白名单 | 检查 `resourceDomains` |
 | 卡片里点「立刻开播」没反应 | 播放器页面没开、或 `/music/remote` 没被轮询 | 先在手机上把播放器页开着（PWA 也算），它每 5 秒接一次远程点播 |
 | 「打开播放器」按钮不见了 | 没配 `MUSIC_PUBLIC_URL` | 配上并重启 MCP |
+| 用 curl 验门回 401 | 站点整体挂了 basic auth，把这条路径也拦了 | 把 `/mcp-music-<随机串>/*` 这条 `handle` 放在 basic auth 之前，或单独排除 |
 
 **5. 其他宿主**
 
