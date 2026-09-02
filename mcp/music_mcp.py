@@ -107,6 +107,9 @@ class ToolError(Exception):
 
 # 模板 URI 同时是宿主缓存键；卡片协议/布局有破坏性更新时必须换版本。
 UI_RESOURCE_URI = "ui://music/card-v4.html"
+UI_RESOURCE_URIS = {
+    UI_RESOURCE_URI, "ui://music/card.html",
+    "ui://music/card-v2.html", "ui://music/card-v3.html"}
 UI_MIME = "text/html;profile=mcp-app"
 APP_HTML_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "card_app.html")
 STRUCT = threading.local()
@@ -865,14 +868,14 @@ class H(BaseHTTPRequestHandler):
             r = {"resources": res_list}
         elif method == "resources/read":
             uri = str(((msg.get("params") or {}).get("uri")) or "")
-            if uri == UI_RESOURCE_URI and os.path.exists(APP_HTML_PATH):
+            if uri in UI_RESOURCE_URIS and os.path.exists(APP_HTML_PATH):
                 with open(APP_HTML_PATH, encoding="utf-8") as f:
                     html = f.read()
                 resource_domains = ["https://p1.music.126.net", "https://p2.music.126.net",
                                     "https://p3.music.126.net", "https://p4.music.126.net"] \
                                    + ([CARD_IMAGE_BASE] if CARD_IMAGE_BASE else [])
                 r = {"contents": [{
-                    "uri": UI_RESOURCE_URI, "mimeType": UI_MIME, "text": html,
+                    "uri": uri, "mimeType": UI_MIME, "text": html,
                     "_meta": {
                         "ui": {"csp": {"resourceDomains": resource_domains, "connectDomains": []},
                                "prefersBorder": False},
