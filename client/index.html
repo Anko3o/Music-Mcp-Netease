@@ -1430,7 +1430,7 @@ audio.addEventListener('timeupdate', () => {
   // 音频的 timeupdate 只要在放就一直响，拿它当后台的钟：5 秒一问远程点播、5 秒一报心跳
   const now = Date.now();
   if (document.hidden) {
-    if (now - bgLastPoll > 5000) { bgLastPoll = now; pollRemote(); }
+    if (now - bgLastPoll > 3000) { bgLastPoll = now; pollRemote(); }
     if (now - bgLastBeat > 5000) { bgLastBeat = now; beatNow(); }
   }
   state.currentTime = audio.currentTime;
@@ -3579,7 +3579,7 @@ async function pollRemote() {
     renderNpBar(); renderQueue();
   } catch {}
 }
-setInterval(() => { if (!document.hidden) pollRemote(); }, 5000);   // foreground: timer; background: driven by timeupdate
+setInterval(() => { if (!document.hidden) pollRemote(); }, 3000);   // foreground: timer; background: driven by timeupdate
 
 // ── Now-playing heartbeat ──
 //    Report playback state every 5s (kept in server memory); the MCP Apps card
