@@ -3219,12 +3219,26 @@ function closeMemory() {
   if (mv) mv.classList.add('hidden');
 }
 
+// NetEase play counts (9-02): local listenCount can't be pushed up, but NetEase's own
+// per-song record (fed by our scrobbles) can be pulled down. Cached 10 min, shown side by side.
+let neteaseCounts = null, neteaseCountsAt = 0;
+async function loadNeteaseCounts() {
+  if (neteaseCounts && Date.now() - neteaseCountsAt < 10 * 60e3) return neteaseCounts;
+  try {
+    const d = await api('/music/netease/record?type=0');
+    const m = new Map(); (d.songs || []).forEach(r => { if (r.songId != null) m.set(String(r.songId), r.playCount || 0); });
+    neteaseCounts = m; neteaseCountsAt = Date.now();
+  } catch (_) { if (!neteaseCounts) neteaseCounts = new Map(); }
+  return neteaseCounts;
+}
 async function loadMemory(songId) {
   const mv = document.getElementById('memory-view');
   if (!mv) return;
   try {
-    const d = await api('/music/memory?id=' + songId);
-    renderMemory(mv, d.memory || {}, songId);
+    const [d, counts] = await Promise.all([api('/music/memory?id=' + songId), loadNeteaseCounts().catch(() => new Map())]);
+    const mem = d.memory || {};
+    if (counts && counts.has(String(songId))) mem.neteaseCount = counts.get(String(songId));
+    renderMemory(mv, mem, songId);
   } catch {
     mv.querySelector('.sm-body').innerHTML = '<div class="sm-empty">批注本没翻开，等会儿再点一下</div>';
   }
@@ -3262,6 +3276,7 @@ function renderMemory(mv, mem, songId) {
   body += '<button class="sm-save" id="sm-save-btn">收进批注本</button>';
   body += '<div class="sm-meta">';
   if (mem.listenCount > 0) body += `<span>听过 ${mem.listenCount} 次</span>`;
+  if (mem.neteaseCount > 0) body += `<span>网易云 ×${mem.neteaseCount}</span>`;
   if (mem.togetherCount > 0) body += `<span>一起听完 ${mem.togetherCount} 次</span>`;
   if (mem.bpm) body += `<span>${mem.bpm} BPM</span>`;
   if (mem.firstListened) body += `<span>初遇 ${fmtDate(mem.firstListened)}</span>`;

@@ -544,9 +544,18 @@ def t_her_recent(args):
     except Exception:
         pass
     out = [f"最近在听（新→旧，{min(limit, len(songs))} 首）："]
+    # 9-02 安可：「听歌次数不能和网易云同步」——本地的上不去，网易的拉得下来（我们的上报会攒进它的总榜）
+    ncount = {}
+    try:
+        for r in (music_get("/music/netease/record", type=0).get("songs") or []):
+            ncount[str(r.get("songId"))] = r.get("playCount") or 0
+    except Exception:
+        pass
     for s in songs[:limit]:
         m = mem.get(str(s.get("songId"))) or {}
         cnt = f" ·听过{m['listenCount']}次" if m.get("listenCount") else ""
+        if ncount.get(str(s.get("songId"))):
+            cnt += f" ·网易×{ncount[str(s.get('songId'))]}"
         out.append(f"· {_fmt_when(s.get('playedAt') or '')}  {s.get('name','?')} — {s.get('artist','')}{cnt}  (song_id {s.get('songId')})")
     return "\n".join(out)
 
