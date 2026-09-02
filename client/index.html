@@ -1566,6 +1566,13 @@ function armDirectFallback(my, song, cacheUrl) {
   audio.addEventListener('playing', clear, { once: true });
 }
 
+// 9-02：等新歌能放了再跳到指定秒（换歌后 currentTime 得等元数据到了才能设）
+function seekWhenReady(at) {
+  const my = loadSeq;
+  const go = () => { if (loadSeq !== my) return; try { audio.currentTime = at; } catch (_) {} audio.play().catch(() => {}); };
+  if (audio.readyState >= 1 && audio.src) go();
+  else audio.addEventListener('loadedmetadata', go, { once: true });
+}
 function togglePlay() {
   if (audio.paused) audio.play().catch(() => {});
   else audio.pause();
@@ -3571,8 +3578,9 @@ async function pollRemote() {
         // diange --now 或播放器闲着:立刻开播
                 showToast(`点播的「${song.name}」来了,现在就放~`);
         loadAndPlay(song);
-      } else {
-        state.queue.push(song);
+        if (raw.at > 0) seekWhenReady(Number(raw.at));   // 9-02：官端卡片点歌词句 → 从那句开始放
+        } else {
+          state.queue.push(song);
                 showToast(`「${song.name}」插进队列了,点 ▤ 看`);
       }
     }

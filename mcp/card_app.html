@@ -32,7 +32,8 @@
   .note { font-size: 12px; color: var(--soft); margin-top: 5px; font-style: italic; }
   .note[hidden], .line[hidden], button[hidden] { display: none; }
   .lyrics { margin-top: 10px; font-size: 12px; line-height: 1.75; color: var(--soft); border-top: 1px solid var(--line); padding-top: 8px; }
-  .lyrics div { padding: 1px 0 1px 9px; border-left: 1px solid transparent; }
+  .lyrics div { padding: 1px 0 1px 9px; border-left: 1px solid transparent; cursor: pointer; }
+  .lyrics div:hover { color: var(--ink); }
   .lyrics div.cur { color: var(--ink); font-weight: 600; border-left-color: var(--hot); }
   .lyrics span.tr { color: var(--faint); font-size: 11px; margin-left: 6px; }
   .np { margin-top: 9px; } .np[hidden] { display: none; }
@@ -203,6 +204,8 @@
         d.appendChild(document.createTextNode(l.x));
         if (l.tr) { var s = document.createElement("span"); s.className = "tr"; s.textContent = l.tr; d.appendChild(s); }
         if (curAt !== null && Math.abs(l.t - curAt) < 0.5) { d.className = "cur"; curEl = d; }
+        d.title = "点一下，跳到这句";                       // 9-02 安可：官端卡片上的歌词能不能跳转
+        d.addEventListener("click", function () { seekTo(l.t, l.x); });
         panel.appendChild(d);
       });
       var lb = byId("btn-lyrics");
@@ -212,6 +215,13 @@
         byId("btn-lyrics-label").textContent = panel.hidden ? "歌词" : "收起";
       };
     }
+  }
+  function seekTo(t, text) {
+    if (!song) return;
+    byId("status").textContent = "跳到 " + mmss(t) + " …";
+    rpc("tools/call", { name: "song_share", arguments: { song_id: String(song.songId), mode: "now", at_seconds: Number(t) || 0 } })
+      .then(function () { byId("status").textContent = "从 " + mmss(t) + " 开始放：" + (text || ""); })
+      .catch(function (e) { byId("status").textContent = "没跳成：" + (e && e.message || ""); });
   }
   function play(mode, label) {
     if (!song) { byId("status").textContent = "还没拿到歌曲信息…"; return; }

@@ -319,6 +319,12 @@ def t_song_share(args):
              "album": song.get("album", ""), "cover": song.get("cover", "")}
         if mode == "now":
             s["mode"] = "now"
+            try:                                   # 9-02 安可：官端卡片上点一句歌词就跳到那句——带上秒数
+                at = float(args.get("at_seconds") or 0)
+                if at > 0:
+                    s["at"] = at
+            except (TypeError, ValueError):
+                pass
         music_post("/music/remote", {"song": s})
         # song_share 始终挂着卡片模板；队列/立即播放也必须给宿主完整数据，
         # 否则 ChatGPT 会挂载一个只有按钮和省略号的空壳。
@@ -694,7 +700,8 @@ TOOLS = [
          "name": {"type": "string"}, "artist": {"type": "string"}, "cover": {"type": "string"},
          "mode": {"type": "string", "enum": ["card", "queue", "now"], "description": "默认 card"},
          "note": {"type": "string", "description": "card 模式：卡片下的配文"},
-         "memo": {"type": "string", "description": "顺手写进批注本的一句话"}}}},
+         "memo": {"type": "string", "description": "顺手写进批注本的一句话"},
+         "at_seconds": {"type": "number", "description": "mode=now 时从第几秒开始放（歌词卡点句跳转用）"}}}},
     {"name": "lyric_share",
      "description": "分享一句歌词（歌词卡）。卡上带时间戳，对方一点就跳进那首歌的这个段落去听。用 match_text 给那句里的几个字，或 at_seconds 给秒数定位。",
      "inputSchema": {"type": "object", "properties": {
