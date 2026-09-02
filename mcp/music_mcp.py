@@ -307,6 +307,19 @@ def t_song_search(args):
     return "\n".join(out)
 
 
+def _lyrics_for_card(song_id):
+    """整篇歌词（时间戳+原文+译文）给 Apps 卡片的滚动面板；拿不到就空，不碍事。"""
+    try:
+        ld = music_get("/music/lyric", id=song_id)
+        ls = parse_lrc(ld.get("lrc") or "")
+        ltr = {round(t["time"] * 100): t["text"] for t in parse_lrc(ld.get("tlyric") or "")}
+        return [dict({"t": l["time"], "x": l["text"]},
+                     **({"tr": ltr[round(l["time"] * 100)]} if round(l["time"] * 100) in ltr else {}))
+                for l in ls][:400]
+    except Exception:
+        return []
+
+
 def t_song_share(args):
     song = resolve_song(args)
     mode = str(args.get("mode") or "card")
@@ -331,7 +344,7 @@ def t_song_share(args):
         music_post("/music/remote", {"song": s})
         # song_share 始终挂着卡片模板；队列/立即播放也必须给宿主完整数据，
         # 否则 ChatGPT 会挂载一个只有按钮和省略号的空壳。
-        set_struct(app_struct("song", card_song, note=str(args.get("note") or ""),
+        set_struct(app_struct("song", card_song, note=str(args.get("note") or ""), lyrics=_lyrics_for_card(song["id"]),
                               action={"mode": mode, "done": True}))
         done.append(("已递到播放器，立刻开播" if mode == "now" else "已插进「接下来播」(播放器开着 5s 内接走)")
                     + f"：{song['name']} — {song['artist']}")
