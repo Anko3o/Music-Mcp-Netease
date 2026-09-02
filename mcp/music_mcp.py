@@ -561,7 +561,7 @@ def t_her_recent(args):
     except Exception:
         pass
     out = [f"最近在听（新→旧，{min(limit, len(songs))} 首）："]
-    # 9-02 安可：「听歌次数不能和网易云同步」——本地的上不去，网易的拉得下来（我们的上报会攒进它的总榜）
+    # 本地听歌次数不能写回网易云，但可以读取网易云累计排行
     ncount = {}
     try:
         for r in (music_get("/music/netease/record", type=0).get("songs") or []):

@@ -4,8 +4,8 @@
 <meta charset="UTF-8">
 <title>music card</title>
 <style>
-  /* 9-02 20:20 安可：「官端的卡片还在用 emoji 代替，有点丑」——整张按兔牙家第二套主题（图纸玻璃）重排：
-     hairline、等宽小注、线图标；跟宿主的明暗走（claude.ai 亮色/暗色都见过）。旧版留档 worksite-backups。 */
+  /* 官端卡片不使用 emoji 占位，整张按粉色图纸玻璃主题重排：
+     hairline、等宽小注、线图标，并跟随宿主明暗主题。 */
   :root { color-scheme: light dark;
     --paper: #fff5f8; --ink: #6b4a55; --soft: #85616f; --faint: #a98a97;
     --line: rgba(152,78,104,.18); --line-bright: rgba(152,78,104,.42); --hot: #e01f74; --accent: #984e68; --inner: rgba(255,255,255,.5); }
@@ -189,7 +189,7 @@
       pb.hidden = false;
       pb.onclick = function () { rpc("ui/open-link", { url: sc.player_url }); };
     }
-    // 滚动歌词（9-01 安可:「是不是能够塞一个滚动歌词呢！」）：
+    // 滚动歌词：
     // 点「歌词」展开整篇，面板内滚动；歌词卡分享的那句高亮并居中
     if (sc.lyrics && sc.lyrics.length) {
       var panel = byId("lyrics");
@@ -228,7 +228,7 @@
   }
   byId("btn-queue").addEventListener("click", function () { play("queue", "已插队"); });
   byId("btn-now").addEventListener("click", function () { play("now", "已开播"); });
-  // 进度条＋跟唱（9-01 安可点单「优化一下嵌入进度条」）：播放器 5 秒一跳心跳 →
+  // 进度条＋跟唱：播放器每 5 秒发送一次心跳 →
   // 服务端 /music/now → MCP 的 music://now 资源 → 这里轮询。只在卡片这首正在播时亮，
   // 本地 1s 插值让指针平滑走；歌词面板开着时顺带点亮当前行＝真·跟唱。
   var np = { pos: 0, dur: 0, playing: false, ok: false, fails: 0 };
@@ -257,7 +257,7 @@
       try { d = JSON.parse(res.contents[0].text); } catch (e) {}
       if (d.ok && String(d.songId) === String(song.songId)) {
         np.ok = true; np.dur = d.duration || 0; np.playing = !!d.playing;
-        // 消滞后（9-01 安可耳测慢 0.5-0.7s）：位置要加回服务端存龄 age，
+        // 消除约 0.5–0.7 秒的实测滞后：位置要加回服务端存龄 age，
         // 再补 0.35s 链路半程（上报+轮询往返），不然高亮永远追着唱
         np.basePos = (d.position || 0) + (np.playing ? (d.age || 0) + 0.35 : 0);
         np.baseAt = performance.now();

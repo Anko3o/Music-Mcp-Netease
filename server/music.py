@@ -630,8 +630,8 @@ class MusicHandler(BaseHTTPRequestHandler):
             if not audio_url:
                 self._send_json(200, {"ok": False, "error": "no url, may need VIP or song unavailable"})
                 return
-            # 2026-09-02 安可：「放一首歌点下去半天没反应」——原来要把整个 mp3 先拉到服务器再答复，
-            # 海外拉网易 CDN 慢，这一等就是几秒。现在拿到地址立刻把 CDN 直链交给客户端（她在国内直连最快），
+            # 首次播放延迟修复：原实现会把整个 mp3 拉到服务器后再答复，
+            # 跨区域拉网易 CDN 较慢；现在拿到地址后立刻把直链交给客户端，
             # 服务器在后台慢慢存缓存，下次再听走 /music/file。直链放不了（跨域/过期）时客户端会回来要缓存版。
             # 页面是 https，直链给 http 会被浏览器当混合内容拦下——网易 CDN 支持 https，硬升
             direct_url = re.sub(r"^http://", "https://", audio_url)
@@ -1271,7 +1271,7 @@ class MusicHandler(BaseHTTPRequestHandler):
 
 
     def _handle_netease_scrobble(self, body: dict):
-        """听歌记账上报（9-01 安可:「和哥哥听了五个小时都没计数!」）:
+        """听歌记账上报：
         把一次播放写回网易云官方客户端同款的 weblog 口,听歌量/年度时长才吃得到这里的播放。
         end='playend' 自然听完,'ui' 中途切歌——都按实际播放秒数记。"""
         song_id = str(body.get("songId") or "")
@@ -1299,7 +1299,7 @@ class MusicHandler(BaseHTTPRequestHandler):
 
 
     def _handle_netease_record(self):
-        """听歌排行拉取(9-01 安可:「听歌次数是不是也能拉取!」):
+        """听歌排行拉取：
         网易云的单曲累计播放榜,type=0 总榜 / 1 最近一周。只读。"""
         qs = parse_qs(urlparse(self.path).query)
         rtype = 1 if qs.get("type", ["0"])[0] == "1" else 0
@@ -1330,7 +1330,7 @@ class MusicHandler(BaseHTTPRequestHandler):
 
 
     def _handle_netease_profile(self):
-        """账号档案(9-01 安可:「查听歌时长」):昵称/听歌量/等级/入网天数,只读。"""
+        """账号档案：昵称、听歌量、等级、入网天数，只读。"""
         try:
             acc = self._netease_request("https://music.163.com/api/nuser/account/get")
             uid = (acc.get("profile") or {}).get("userId")

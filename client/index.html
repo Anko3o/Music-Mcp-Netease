@@ -670,9 +670,9 @@ body.window-mini .np-eyebrow { display: none; }
   transition: transform var(--t-slow) var(--ease-in-out);
 }
 .lyrics-view.hidden { transform: translateY(100%); pointer-events: none; }
-/* 9-02 19:57 安可：「当歌词页背景不就好了嘛」——歌词页底下一朵跟着歌转的李萨如（两个频率的比＝这首歌的一个音程），
+/* 歌词页背景：底下一朵跟着歌转的李萨如（两个频率的比＝这首歌的一个音程），
    1px 线，很淡；字压在花上。画布垫在最底，其余子元素抬到 z-index:1。 */
-.ly-liss { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; opacity: .35; }   /* 20:41 安可：再淡一点 */
+.ly-liss { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; opacity: .35; }   /* 保持低对比度 */
 .lyrics-view > *:not(.ly-liss) { position: relative; z-index: 1; }
 .ly-header {
   padding: 12px 16px; display: flex; align-items: center; justify-content: space-between;
@@ -1086,7 +1086,7 @@ body.window-mini .np-eyebrow { display: none; }
 .toast.show { opacity: 1; }
 
 /* ── 「切标签就好」提示条(2026-08-08)：原来这里是直接把播放器导航走，音乐必死。
-   现在改成给她选择：默认留在后台继续唱，真要跳走得她自己按。 ── */
+   现在改成由用户选择：默认留在后台继续播放，需要跳转时主动按按钮。 ── */
 .stuck-hint {
   position: fixed; left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom));
   z-index: 9100; display: flex; flex-direction: column; gap: 8px;
@@ -1341,7 +1341,7 @@ async function postLyricNow() {
 
 /* Long-press any lyric line to share it (with surrounding lines + translation):
    长按选句不再跑回聊天页——歌词页里浮出小输入条,想说的话就地写,「递过去」直接寄出
-   (music:lyric-send → 聊天端立发,带她的话和整包歌词)。 */
+   (music:lyric-send → 聊天端立发，带配文和整包歌词)。 */
 let lyChatIdx = -1;
 function lyricPick(j) {
   const l = lyricLines[j];
@@ -1426,7 +1426,7 @@ let bgLastPoll = 0, bgLastBeat = 0;
 audio.addEventListener('timeupdate', () => {
   // 9-02：过半就预取下一首的地址（随机模式此时抽签）
   if (audio.duration && audio.currentTime > audio.duration * 0.5 && !prefetchedNext) { const n = peekNext(); if (n) { if (!prefetchedNext) prefetchedNext = n; prefetchUrl(n); } }
-  // 9-02 安可：「后台插不进去歌，明明开了白名单」——setInterval 在后台会被掐成一分钟一次甚至挂起，
+  // 后台插歌修复：setInterval 在后台会被掐成一分钟一次甚至挂起，
   // 音频的 timeupdate 只要在放就一直响，拿它当后台的钟：5 秒一问远程点播、5 秒一报心跳
   const now = Date.now();
   if (document.hidden) {
@@ -1455,7 +1455,7 @@ audio.addEventListener('timeupdate', () => {
 audio.addEventListener('play', () => { state.playing = true; notify(); postSongToParent(); });
 audio.addEventListener('pause', () => { state.playing = false; notify(); postSongToParent(); });
 
-/* 听歌记账上报(9-01 安可:「和哥哥听了五个小时都没计数!」):
+/* 听歌记账上报：
    听完/切歌时把本次实际播放秒数写回网易云,听歌量和年度报告才认这里的账。
    30 秒以下不记,跟官方口径一致;失败静默,不打扰听歌。 */
 function scrobbleToNetease(end) {
@@ -1485,7 +1485,7 @@ audio.addEventListener('ended', () => {
 });
 
 let loadSeq = 0;   // stale-guard: when songs are tapped in quick succession, late URLs are discarded
-/* ── 9-02 20:27 安可：「后台播放总是自己断」——病根在换歌：一首放完要先去要下一首地址，
+/* ── 后台连续播放修复——病根在换歌：一首放完要先去要下一首地址，
    等回来再 play，手机浏览器在后台不给「隔了一会儿才 play」放行。治法：正在放的这首过半时就把
    下一首的地址预取好（urlCache，直链/缓存路径都存，留 15 分钟），放完那一瞬间同步切、不碰网络。 ── */
 const urlCache = new Map();          // songId → { url, direct, cache_url, at }
@@ -1701,9 +1701,9 @@ function returnHomeWithoutStopping() {
     mobileReturnFallback = 0;
     // Mobile back-button fix: keep playback alive across navigation.
     // 原来这里是 location.assign('/')——把播放器这一页直接导航走,音乐必死。
-    // 初衷是「别让她被困住」,但代价太大:手机 web 的音频只要文档一卸载就停,
+    // 初衷是避免用户被困住，但代价太大：手机 web 的音频只要文档一卸载就停，
     // 后台标签才活得下去。所以改成:主页已经在另一个标签开好了,这里只提示怎么切,
-    // 音乐照唱。真想强制跳转,给她一个明确的按钮自己按,不替她做主。
+    // 音乐照常播放；强制跳转必须由用户主动按下明确的按钮。
     if (document.visibilityState === 'visible' && location.pathname.startsWith('/music')) {
       showStuckHint();
     }
@@ -2192,7 +2192,7 @@ async function renderPlaylists(container) {
   }
 
   /* Account playlist mirror: the cookie account's own lists,
-     网易云歌单只读镜像:她的账号她的单,点进去照常放,不改不删云端任何东西 */
+     网易云歌单只读镜像：点进去照常播放，不修改或删除云端内容。 */
   neteaseLists = (nd && nd.ok) ? (nd.playlists || []).map(p => ({ ...p, netease: true })) : [];
   if (neteaseLists.length) {
     html += `</div>
@@ -2766,11 +2766,11 @@ function closeLyrics() {
   lissStop();
 }
 
-/* ── 歌词页的李萨如花（9-02 安可点单）──
+/* ── 歌词页的李萨如花 ──
    x = sin(a·t + φ)，y = sin(b·t)。a:b 按这首歌的 id 从几个音程里挑一个（2:3 纯五度 / 3:4 纯四度 / 3:5 大六度 / 4:5 大三度 / 5:6 小三度），
    φ 跟着播放进度慢慢走：歌在放，花就在转；暂停了就停在那一刻。尾迹只留最近一段，像示波器的余辉。减少动效＝静帧。 */
 const LISS_RATIOS = [[2, 3], [3, 4], [3, 5], [4, 5], [5, 6], [1, 2]];
-let lissRAF = 0, lissLast = 0, lissDrift = 0;   // lissDrift：播放时慢慢攒的相位，暂停就停在攒到的地方（20:02 安可：「暂停好鬼畜，不在原位置」）
+let lissRAF = 0, lissLast = 0, lissDrift = 0;   // lissDrift：播放时慢慢攒相位，暂停后保持原位
 function lissRatio() {
   const id = String((state.song && state.song.songId) || '0');
   let h = 0; for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
@@ -2792,7 +2792,7 @@ function lissFrame(now) {
     if (!reduce && !audio.paused) lissDrift += 0.01 * Math.min(0.1, (now - (lissFrame._t || now)) / 1000);
     lissFrame._t = now;
     const phi = (audio.currentTime || 0) * 0.06 + lissDrift;
-    // 底线：画在暗地里的画布上，相位变了 0.02 以上才重画（20:06 安可「有点卡」——之前每帧重画整条线）
+    // 底线：画在离屏画布上，相位变化超过 0.02 才重画，避免每帧重画整条线
     const key = a + ':' + b + '|' + W + 'x' + H + '|' + DPR;
     if (!lissBase) lissBase = document.createElement('canvas');
     if (lissBaseKey !== key || lissBasePhi === null || Math.abs(phi - lissBasePhi) > 0.004) {   // 20:43：0.02 太稀（三分之一秒一格），0.004 ≈ 每秒十五次
