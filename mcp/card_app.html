@@ -7,15 +7,27 @@
   /* 官端卡片不使用 emoji 占位，整张按粉色图纸玻璃主题重排：
      hairline、等宽小注、线图标，并跟随宿主明暗主题。 */
   :root { color-scheme: light dark;
-    --paper: #fff5f8; --ink: #6b4a55; --soft: #85616f; --faint: #a98a97;
-    --line: rgba(152,78,104,.18); --line-bright: rgba(152,78,104,.42); --hot: #e01f74; --accent: #984e68; --inner: rgba(255,255,255,.5); }
+    --paper: rgba(255,255,255,.62); --paper-fallback: #fdf4f2;
+    --ink: #6b4a55; --soft: #85616f; --faint: #cfb6c0;
+    --line: rgba(194,112,138,.16); --line-bright: rgba(255,255,255,.9);
+    --hot: #c2708a; --accent: #984e68; --btn: #d26e88;
+    --inner: rgba(255,255,255,.34); --glass-edge: rgba(255,255,255,.9);
+    --glass-shadow: rgba(214,120,170,.16); --button-glass: rgba(255,255,255,.28); }
   @media (prefers-color-scheme: dark) {
-    :root { --paper: #1a1218; --ink: #f5e8ee; --soft: #c9afbd; --faint: #a08b96;
-            --line: rgba(242,241,237,.17); --line-bright: rgba(242,241,237,.5); --hot: #ff5fa4; --accent: #e4a4ba; --inner: rgba(255,231,237,.08); } }
-  /* 宿主 iframe 可能比内容高——html 打同色底，别让下边缘露出窟窿（9-01 真机） */
-  html { background: var(--paper); min-height: 100%; }
+    :root { --paper: rgba(18,18,20,.58); --paper-fallback: #171719;
+            --ink: #f5e8ee; --soft: #c9afbd; --faint: #a08b96;
+            --line: rgba(242,241,237,.17); --line-bright: rgba(255,255,255,.25);
+            --hot: #d999ad; --accent: #e4a4ba; --btn: #c85f7d;
+            --inner: rgba(255,231,237,.08); --glass-edge: rgba(255,255,255,.16);
+            --glass-shadow: rgba(0,0,0,.34); --button-glass: rgba(255,255,255,.07); } }
+  html { background: transparent; min-height: 100%; }
   * { margin: 0; box-sizing: border-box; }
-  body { font-family: 'PingFang SC', 'Noto Sans SC', 'Microsoft YaHei', system-ui, sans-serif; background: var(--paper); color: var(--ink); padding: 12px 14px 10px; border-radius: 14px;
+  body { font-family: 'PingFang SC', 'Noto Sans SC', 'Microsoft YaHei', system-ui, sans-serif;
+    background: var(--paper); color: var(--ink); padding: 12px 14px 10px; border-radius: 16px;
+    border: 1px solid var(--glass-edge);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.34), 0 12px 32px var(--glass-shadow);
+    -webkit-backdrop-filter: blur(18px) saturate(1.35);
+    backdrop-filter: blur(18px) saturate(1.35);
     /* 别钳高度：claude.ai 直接量 iframe 里 DOM 的真实高度来定卡片高（anthropics/claude-ai-mcp#69） */ }
   .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 9px; letter-spacing: .22em; text-transform: uppercase; color: var(--faint); }
   .fig { display: flex; justify-content: space-between; align-items: baseline; padding-bottom: 8px; margin-bottom: 10px; border-bottom: 1px solid var(--line-bright); }
@@ -42,11 +54,12 @@
   .np-fill::after { content: ""; position: absolute; right: -2px; top: -2px; width: 5px; height: 5px; border-radius: 50%; background: var(--hot); }
   .np-time { display: flex; justify-content: space-between; margin-top: 4px; }
   .btns { display: flex; gap: 6px; margin-top: 9px; flex-wrap: wrap; }
-  button { font: inherit; font-size: 12px; color: var(--ink); cursor: pointer; background: transparent; border: 1px solid var(--line-bright); border-radius: 999px; padding: 5px 11px 5px 9px; display: inline-flex; align-items: center; gap: 5px; letter-spacing: .02em; }
+  button { font: inherit; font-size: 12px; color: var(--ink); cursor: pointer; background: var(--button-glass); border: 1px solid var(--line-bright); border-radius: 999px; padding: 5px 11px 5px 9px; display: inline-flex; align-items: center; gap: 5px; letter-spacing: .02em;
+    -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
   button svg { width: 13px; height: 13px; flex: none; }
   button:hover { border-color: var(--accent); color: var(--accent); }
   button:disabled { opacity: .5; cursor: default; }
-  #btn-now { background: var(--accent); border-color: var(--accent); color: #fff; } #btn-now:hover { color: #fff; opacity: .9; }
+  #btn-now { background: var(--btn); border-color: var(--btn); color: #fff; } #btn-now:hover { color: #fff; opacity: .9; }
   .status { font-size: 11px; color: var(--faint); margin-top: 6px; min-height: 13px; white-space: pre-line; }
   .foot { display: flex; justify-content: space-between; margin-top: 8px; padding-top: 6px; border-top: 1px solid var(--line); }
 
@@ -54,19 +67,25 @@
      和 iframe 收高，不再维护第二套白底排版。 */
   html.host-openai {
     min-height: 0;
-    background: var(--paper);
+    background: transparent;
     --host-safe-top: 0px; --host-safe-left: 0px;
     --host-safe-right: 0px; --host-safe-bottom: 0px;
   }
   html.host-openai[data-openai-theme="light"] {
-    --paper: #fff5f8; --ink: #6b4a55; --soft: #85616f; --faint: #a98a97;
-    --line: rgba(152,78,104,.18); --line-bright: rgba(152,78,104,.42);
-    --hot: #e01f74; --accent: #984e68; --inner: rgba(255,255,255,.5);
+    --paper: rgba(255,255,255,.62); --paper-fallback: #fdf4f2;
+    --ink: #6b4a55; --soft: #85616f; --faint: #cfb6c0;
+    --line: rgba(194,112,138,.16); --line-bright: rgba(255,255,255,.9);
+    --hot: #c2708a; --accent: #984e68; --btn: #d26e88;
+    --inner: rgba(255,255,255,.34); --glass-edge: rgba(255,255,255,.9);
+    --glass-shadow: rgba(214,120,170,.16); --button-glass: rgba(255,255,255,.28);
   }
   html.host-openai[data-openai-theme="dark"] {
-    --paper: #1a1218; --ink: #f5e8ee; --soft: #c9afbd; --faint: #a08b96;
-    --line: rgba(242,241,237,.17); --line-bright: rgba(242,241,237,.5);
-    --hot: #ff5fa4; --accent: #e4a4ba; --inner: rgba(255,231,237,.08);
+    --paper: rgba(18,18,20,.58); --paper-fallback: #171719;
+    --ink: #f5e8ee; --soft: #c9afbd; --faint: #a08b96;
+    --line: rgba(242,241,237,.17); --line-bright: rgba(255,255,255,.25);
+    --hot: #d999ad; --accent: #e4a4ba; --btn: #c85f7d; --inner: rgba(255,231,237,.08);
+    --glass-edge: rgba(255,255,255,.16); --glass-shadow: rgba(0,0,0,.34);
+    --button-glass: rgba(255,255,255,.07);
   }
   html.host-openai body {
     background: var(--paper);
@@ -77,6 +96,9 @@
     html.host-openai .cover { width: 72px; height: 72px; }
     html.host-openai .card { gap: 10px; }
     html.host-openai body { padding-left: calc(10px + var(--host-safe-left)); padding-right: calc(10px + var(--host-safe-right)); }
+  }
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    body { background: var(--paper-fallback); }
   }
 </style>
 </head>

@@ -106,7 +106,7 @@ class ToolError(Exception):
     """工具层的『没成』：抛出来由 tools/call 标 isError，回话不再靠 ❌ 前缀识别。"""
 
 # 模板 URI 同时是宿主缓存键；卡片协议/布局有破坏性更新时必须换版本。
-UI_RESOURCE_URI = "ui://music/card-v2.html"
+UI_RESOURCE_URI = "ui://music/card-v3.html"
 UI_MIME = "text/html;profile=mcp-app"
 APP_HTML_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "card_app.html")
 STRUCT = threading.local()
@@ -875,9 +875,9 @@ class H(BaseHTTPRequestHandler):
                     "uri": UI_RESOURCE_URI, "mimeType": UI_MIME, "text": html,
                     "_meta": {
                         "ui": {"csp": {"resourceDomains": resource_domains, "connectDomains": []},
-                               "prefersBorder": True},
+                               "prefersBorder": False},
                         "openai/widgetCSP": {"resource_domains": resource_domains, "connect_domains": []},
-                        "openai/widgetPrefersBorder": True}}]}
+                        "openai/widgetPrefersBorder": False}}]}
             elif uri == "music://now":
                 # data source for the card's progress bar: player heartbeat -> /music/now -> here
                 try:
