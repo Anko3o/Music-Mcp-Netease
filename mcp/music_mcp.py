@@ -295,14 +295,14 @@ def t_song_share(args):
     done = []
     if memo:
         _memo(song, memo)
-        done.append(f"✎ 批注已记「{memo}」")
+        done.append(f"批注已记「{memo}」")
     if mode in ("queue", "now"):
         s = {"songId": song["id"], "name": song["name"], "artist": song["artist"],
              "album": song.get("album", ""), "cover": song.get("cover", "")}
         if mode == "now":
             s["mode"] = "now"
         music_post("/music/remote", {"song": s})
-        done.append(("▶ 已递到播放器,立刻开播" if mode == "now" else "⏯ 已插进「接下来播」(播放器开着 5s 内接走)")
+        done.append(("▶ 已递到播放器,立刻开播" if mode == "now" else "已插进「接下来播」(播放器开着 5s 内接走)")
                     + f"：{song['name']} — {song['artist']}")
     else:
         card_song = {"songId": str(song["id"]), "name": song["name"], "artist": song["artist"],
@@ -326,7 +326,7 @@ def t_song_share(args):
             if md:
                 done.append(md)
         else:
-            done.append(f"♪ 歌曲卡已发：{song['name']} — {song['artist']}")
+            done.append(f"歌曲卡已发：{song['name']} — {song['artist']}")
     return "\n".join(done)
 
 
@@ -335,7 +335,7 @@ def t_lyric_share(args):
     d = music_get("/music/lyric", id=song["id"])
     lines = parse_lrc(d.get("lrc") or "")
     if not lines:
-        return f"❌ 「{song['name']}」没有歌词，分享不了句子（可以改用 song_share 点整首）"
+        return f"「{song['name']}」没有歌词，分享不了句子（可以改用 song_share 点整首）"
     trans = {round(t["time"] * 100): t["text"] for t in parse_lrc(d.get("tlyric") or "")}
 
     at = args.get("at_seconds")
@@ -347,7 +347,7 @@ def t_lyric_share(args):
                 idx = i
                 break
         if idx is None:
-            return f"❌ 歌词里找不到「{match}」。可以先不带 match_text 调一次看整词，或换 at_seconds 定位"
+            return f"歌词里找不到「{match}」。可以先不带 match_text 调一次看整词，或换 at_seconds 定位"
     elif at is not None:
         at = float(at)
         idx = 0
@@ -357,7 +357,7 @@ def t_lyric_share(args):
             else:
                 break
     else:
-        return "❌ 要么给 at_seconds（秒），要么给 match_text（那句里的几个字）"
+        return "要么给 at_seconds（秒），要么给 match_text（那句里的几个字）"
 
     def pack(i):
         if i < 0 or i >= len(lines):
@@ -393,15 +393,15 @@ def t_lyric_share(args):
         if md:
             out.append(md)
     else:
-        out.append(f"🎧 歌词卡已发：{song['name']} {mmss(cur['time'])}「{cur['text']}」")
+        out.append(f"歌词卡已发：{song['name']} {mmss(cur['time'])}「{cur['text']}」")
         out.append("对方一点卡片就会跳进这句去听。")
     # 分享过的句子自动收进批注本的「喜欢的句子」＝这首歌的共同回忆
     _fav(song, cur["text"] + (f"（{cur['trans']}）" if cur.get("trans") else ""))
-    out.append("✧ 这句已收进批注本的「喜欢的句子」。")
+    out.append("这句已收进批注本的「喜欢的句子」。")
     memo = str(args.get("memo") or "").strip()
     if memo:
         _memo(song, memo)
-        out.append(f"✎ 批注已记「{memo}」")
+        out.append(f"批注已记「{memo}」")
     return "\n".join(out)
 
 
@@ -413,7 +413,7 @@ def t_her_netease(args):
     if what == "profile":
         d = music_get("/music/netease/profile")
         if not d.get("ok"):
-            return "❌ 账号档案拉取失败"
+            return "账号档案拉取失败"
         p = d["profile"]
         return (f"☁ {p.get('nickname')} 的网易云档案:累计听歌 {p.get('listenSongs')} 首"
                 f" | Lv.{p.get('level')} | 入网 {p.get('createDays')} 天"
@@ -422,13 +422,13 @@ def t_her_netease(args):
     if what == "likes":
         pls = music_get("/music/netease/playlists")
         if not pls.get("ok"):
-            return "❌ 歌单列表拉不到"
+            return "歌单列表拉不到"
         liked = next((p for p in pls["playlists"] if p.get("mine") and "喜欢的音乐" in p.get("name", "")), None)
         if not liked:
-            return "❌ 找不到「喜欢的音乐」歌单"
+            return "找不到「喜欢的音乐」歌单"
         d = music_get("/music/netease/playlist", id=liked["id"], limit=limit)
         if not d.get("ok"):
-            return "❌ 红心单内容拉取失败"
+            return "红心单内容拉取失败"
         out = [f"红心单共 {liked.get('count', '?')} 首,最近 {len(d['songs'])} 首:"]
         out += [f"{i}. {s['name']} — {s['artist']}" + (f" · {s['album']}" if s.get("album") else "")
                 + f"  (song_id {s['songId']})" for i, s in enumerate(d["songs"], 1)]
@@ -437,7 +437,7 @@ def t_her_netease(args):
     if what in ("record", "record_week"):
         d = music_get("/music/netease/record", type=1 if what == "record_week" else 0)
         if not d.get("ok"):
-            return "❌ 听歌排行拉取失败"
+            return "听歌排行拉取失败"
         songs = d.get("songs") or []
         if not songs:
             return "排行还是空的。"
@@ -449,7 +449,7 @@ def t_her_netease(args):
     if what == "daily":
         d = music_get("/music/netease/daily")
         if not d.get("ok"):
-            return "❌ 日推拉取失败"
+            return "日推拉取失败"
         out = [f"今日日推(前 {min(limit, len(d['songs']))}):"]
         for i, s in enumerate(d["songs"][:limit], 1):
             out.append(f"{i}. {s['name']} — {s['artist']}" + (f"  「{s['reason']}」" if s.get("reason") else "")
@@ -461,27 +461,27 @@ def t_her_netease(args):
         if pid:
             d = music_get("/music/netease/playlist", id=pid, limit=limit)
             if not d.get("ok"):
-                return "❌ 歌单内容拉取失败"
+                return "歌单内容拉取失败"
             out = [f"该歌单前 {len(d['songs'])} 首:"]
             out += [f"{i}. {s['name']} — {s['artist']}  (song_id {s['songId']})"
                     for i, s in enumerate(d["songs"], 1)]
             return "\n".join(out)
         d = music_get("/music/netease/playlists")
         if not d.get("ok"):
-            return "❌ 歌单列表拉不到"
+            return "歌单列表拉不到"
         out = ["账号歌单架:"]
         out += [f"· {p['name']}({p.get('count', '?')} 首,id {p['id']}{',自建' if p.get('mine') else ''})"
                 for p in d["playlists"][:30]]
         return "\n".join(out)
 
-    return "❌ what 要是 profile/likes/record/record_week/daily/playlists 之一"
+    return "what 要是 profile/likes/record/record_week/daily/playlists 之一"
 
 
 def t_song_memo(args):
     song = resolve_song(args)
     memo = str(args.get("memo") or "").strip()
     if not memo:
-        return "❌ memo 不能是空的"
+        return "memo 不能是空的"
     _memo(song, memo)
     return f"✎ 已记进「{song['name']}」的批注本：{memo}"
 
@@ -556,7 +556,7 @@ def t_song_comments(args):
     offset = max(0, int(args.get("offset") or 0))
     d = music_get("/music/comments", id=song["id"], limit=limit, offset=offset)
     if not d.get("ok"):
-        return "❌ 评论暂时取不到"
+        return "评论暂时取不到"
 
     def fmt(c):
         txt = (c.get("content") or "").replace("\n", " ")
@@ -587,7 +587,7 @@ def t_song_listen(args):
             a = d.get("analysis")
             break
         if isinstance(st, str) and st.startswith("error"):
-            return f"❌ 耳朵出错:{st}(服务器需要 numpy+ffmpeg,可用 MUSIC_ANALYZE_PYTHON 指定带 numpy 的 python)"
+            return f"耳朵出错:{st}(服务器需要 numpy+ffmpeg,可用 MUSIC_ANALYZE_PYTHON 指定带 numpy 的 python)"
         _t.sleep(1)
     if not a:
         return "⏳ 还在听(第一次要现取歌+跑频谱),过十几秒再调一次拿结果"
@@ -623,7 +623,7 @@ def t_playlists(args):
         return "本地歌单架：\n" + "\n".join(f"· {p['name']}（{p['count']} 首，id {p['id']}）" for p in pls)
     hit, pls = _find_playlist(key)
     if not hit:
-        return f"❌ 没找到歌单「{key}」。现有：{'、'.join(p['name'] for p in pls) or '（空）'}"
+        return f"没找到歌单「{key}」。现有：{'、'.join(p['name'] for p in pls) or '（空）'}"
     songs = music_get("/music/playlists/songs", id=hit["id"]).get("songs") or []
     out = [f"歌单「{hit['name']}」共 {len(songs)} 首："]
     for s in songs[:50]:
@@ -635,10 +635,10 @@ def t_playlists(args):
 def t_playlist_add(args):
     key = str(args.get("playlist") or "").strip()
     if not key:
-        return "❌ 要给 playlist（歌单名或 id）。先用 playlists 看看架子上有什么"
+        return "要给 playlist（歌单名或 id）。先用 playlists 看看架子上有什么"
     hit, pls = _find_playlist(key)
     if not hit:
-        return f"❌ 没找到歌单「{key}」。现有：{'、'.join(p['name'] for p in pls) or '（空）'}"
+        return f"没找到歌单「{key}」。现有：{'、'.join(p['name'] for p in pls) or '（空）'}"
     song = resolve_song(args)
     r = music_post("/music/playlists/add-song", {"playlistId": hit["id"], "by": SIGN_AS, "song": {
         "songId": str(song["id"]), "name": song["name"], "artist": song["artist"],
@@ -646,8 +646,8 @@ def t_playlist_add(args):
     if r.get("duplicate"):
         return f"「{song['name']}」本来就在「{hit['name']}」里，没重复收。"
     if not r.get("ok"):
-        return f"❌ 收不进去：{r}"
-    return f"➕ 已把「{song['name']} — {song['artist']}」收进歌单「{hit['name']}」（署名 {SIGN_AS}）。"
+        return f"收不进去：{r}"
+    return f"已把「{song['name']} — {song['artist']}」收进歌单「{hit['name']}」（署名 {SIGN_AS}）。"
 
 
 TOOLS = [
@@ -737,11 +737,11 @@ HANDLERS = {"song_search": t_song_search, "song_share": t_song_share,
 def call(name, args):
     fn = HANDLERS.get(name)
     if not fn:
-        return f"❌ 没有这把工具: {name}"
+        return f"没有这把工具: {name}"
     try:
         return fn(args or {})
     except ValueError as e:
-        return f"❌ {e}"
+        return f"{e}"
 
 
 class H(BaseHTTPRequestHandler):
@@ -805,7 +805,7 @@ class H(BaseHTTPRequestHandler):
             try:
                 text = call(p.get("name"), p.get("arguments") or {})
             except Exception as e:
-                text = f"❌ 执行出错: {e}"
+                text = f"执行出错: {e}"
             r = {"content": [{"type": "text", "text": text}]}
             struct = pop_struct()
             if struct is not None:

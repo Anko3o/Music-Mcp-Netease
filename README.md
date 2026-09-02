@@ -140,6 +140,74 @@ MCP 环境变量：
 
 **② 卡片图（markdown 图片，兜底）**：官端聊天窗不渲染自定义组件，但渲染 markdown 图片——所以 server 提供 `GET /music/card?id=&line=`：现画一张 900×300 的歌曲卡（封面取色渐变底＋歌名/歌手/一句歌词；有 Pillow＋CJK 字体出 PNG，没有则退自包含 SVG）。配置 `MUSIC_CARD_BASE` 后，`song_share` / `lyric_share` 会附上这行图片 markdown，AI 原样贴进回复即可。注意两点：卡片端点**免鉴权**（官端 `<img>` 带不了凭证；内容只有封面/歌名/一句歌词这类公开数据），反代放行 `/music/card` 即可；PNG 需要 `pip install pillow` 和一套中文字体（如 `fonts-noto-cjk`，或用 `MUSIC_CARD_FONT` 指定字体文件）。
 
+### 接入 claude.ai / Claude app（自定义连接器）
+
+这一节是「把点歌台挂进官方 Claude」的完整步骤。做完以后，在 claude.ai 网页、桌面端和手机 app 里都能直接让 Claude 搜歌、发歌曲卡/歌词卡、往你的播放器里插歌，卡片是可点的（MCP Apps）。
+
+**0. 前提**
+
+- 播放器 `server/music.py` 和点歌台 `mcp/music_mcp.py` 都已经在你的服务器上跑起来（见上文「快速开始」）。
+- 有一个带 HTTPS 的域名。claude.ai 只接 `https://` 的远程 MCP，本机 `127.0.0.1` 它够不着。
+
+**1. 给 MCP 开一扇带锁的门**
+
+`music_mcp.py` 默认只听本机 `127.0.0.1:18012`，本身没有鉴权。最省事的锁是**把 URL 当密码**：反代一条长随机路径到它，路径本身在 TLS 里传输，强度和 Bearer 相当。
+
+```bash
+openssl rand -hex 16        # 生成一段随机串，比如 3573b38c…，只告诉 claude.ai
+```
+
+Caddy 示例（放进你的站点块）：
+
+```caddyfile
+handle /mcp-music-<你的随机串>/* {
+    uri strip_prefix /mcp-music-<你的随机串>
+    reverse_proxy 127.0.0.1:18012
+}
+```
+
+Nginx 等价写法：`location /mcp-music-<随机串>/ { proxy_pass http://127.0.0.1:18012/; }`。
+
+改完重载反代，用 curl 验一下门开没开（MCP 只认 POST，GET 回 405 就是通了）：
+
+```bash
+curl -i https://你的域名/mcp-music-<随机串>/mcp
+```
+
+**2. 在 claude.ai 里添加连接器**
+
+1. 打开 claude.ai → 右上角头像 → **Settings → Connectors**（手机 app 在 Settings 里同名）。
+2. 点 **Add custom connector**。
+3. Name 随意（比如 `music`），**Remote MCP server URL** 填：`https://你的域名/mcp-music-<随机串>/mcp`。
+4. OAuth 那两栏留空（我们用的是 URL 当密码，不走 OAuth），保存。
+5. 回到对话，输入框旁的「+」→ Connectors，把 `music` 打开；第一次调用工具时它会弹一次授权，允许即可。
+
+之后直接说话就行：「帮我搜一下ヨルシカ的夜行」「把这首插进我的播放队列」「把『唯有回忆才是真实的』那句做成歌词卡发我」。
+
+**3. 让卡片长出来（可选但推荐）**
+
+`song_share` / `lyric_share` 自带 MCP Apps 卡片（模板在 `mcp/card_app.html`）。claude.ai 网页与桌面端已支持 Apps，卡片会自动渲染成带封面、歌词句、进度条和「插进接下来播 / 立刻开播 / 打开播放器 / 歌词」四个按钮的交互卡。要让它完整工作，还要两样：
+
+- `MUSIC_PUBLIC_URL`：播放器的公网入口（如 `https://你的域名/music/`），卡片上的「打开播放器」按钮靠它。
+- 封面是外链加载的，模板已经在 `resources/read` 里声明了网易封面域名的 CSP 白名单（`p1`–`p4.music.126.net`）；如果你换了封面来源，记得同步改 `music_mcp.py` 里的 `resourceDomains`。
+
+不支持 Apps 的宿主会自动退回纯文字，不用额外配置。
+
+**4. 常见问题**
+
+| 现象 | 多半是 | 怎么办 |
+|---|---|---|
+| 添加连接器时报「无法连接」 | URL 少了末尾 `/mcp`，或反代没重载 | 用上面的 curl 验门；确认 `strip_prefix` 后的路径落在 `/mcp` |
+| 工具能调，但卡片是一行字 | 宿主不支持 MCP Apps（旧版客户端 / 第三方宿主） | 换 claude.ai 网页或桌面端试；文字版本身就是兜底 |
+| 卡片出来了，封面是空的 | 封面域名不在 CSP 白名单 | 检查 `resourceDomains` |
+| 卡片里点「立刻开播」没反应 | 播放器页面没开、或 `/music/remote` 没被轮询 | 先在手机上把播放器页开着（PWA 也算），它每 5 秒接一次远程点播 |
+| 「打开播放器」按钮不见了 | 没配 `MUSIC_PUBLIC_URL` | 配上并重启 MCP |
+
+**5. 其他宿主**
+
+- **Claude Code / Codex CLI**：本机直连即可，`.mcp.json` 写 `http://127.0.0.1:18012/mcp`（见上文）；Codex 在 `~/.codex/config.toml` 的 `[mcp_servers.music]` 里填同一个地址。
+- **ChatGPT**：走「连接器 → 自定义 MCP」，同样填上面那个 HTTPS 地址，工具可用；卡片是 OpenAI 自家的 Apps SDK 规范，和 MCP Apps 不通用，目前在 ChatGPT 里只出文字。
+
 ### 播放器环境变量
 
 | 变量 | 默认 | 说明 |

@@ -4,82 +4,76 @@
 <meta charset="UTF-8">
 <title>music card</title>
 <style>
-  :root { color-scheme: dark; }
+  /* 9-02 20:20 安可：「官端的卡片还在用 emoji 代替，有点丑」——整张按兔牙家第二套主题（图纸玻璃）重排：
+     hairline、等宽小注、线图标；跟宿主的明暗走（claude.ai 亮色/暗色都见过）。旧版留档 worksite-backups。 */
+  :root { color-scheme: light dark;
+    --paper: #fff5f8; --ink: #6b4a55; --soft: #85616f; --faint: #a98a97;
+    --line: rgba(152,78,104,.18); --line-bright: rgba(152,78,104,.42); --hot: #e01f74; --accent: #984e68; --inner: rgba(255,255,255,.5); }
+  @media (prefers-color-scheme: dark) {
+    :root { --paper: #1a1218; --ink: #f5e8ee; --soft: #c9afbd; --faint: #a08b96;
+            --line: rgba(242,241,237,.17); --line-bright: rgba(242,241,237,.5); --hot: #ff5fa4; --accent: #e4a4ba; --inner: rgba(255,231,237,.08); } }
   /* 宿主 iframe 可能比内容高——html 打同色底，别让下边缘露出窟窿（9-01 真机） */
-  html { background: #12151c; min-height: 100%; }
+  html { background: var(--paper); min-height: 100%; }
   * { margin: 0; box-sizing: border-box; }
-  body {
-    font-family: 'PingFang SC', 'Noto Sans SC', 'Microsoft YaHei', system-ui, sans-serif;
-    background: linear-gradient(180deg, #2b3140, #12151c);
-    color: #fff; padding: 12px 14px; border-radius: 14px;
-    /* 别钳高度：claude.ai 是直接量 iframe 里 DOM 的真实高度来定卡片高的
-       （anthropics/claude-ai-mcp#69），max-height 一夹它就永远量到「刚好装满」，
-       卡片再也长不高。让文档诚实报身高，宿主自然把框拉够。 */
-  }
+  body { font-family: 'PingFang SC', 'Noto Sans SC', 'Microsoft YaHei', system-ui, sans-serif; background: var(--paper); color: var(--ink); padding: 12px 14px 10px; border-radius: 14px;
+    /* 别钳高度：claude.ai 直接量 iframe 里 DOM 的真实高度来定卡片高（anthropics/claude-ai-mcp#69） */ }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 9px; letter-spacing: .22em; text-transform: uppercase; color: var(--faint); }
+  .fig { display: flex; justify-content: space-between; align-items: baseline; padding-bottom: 8px; margin-bottom: 10px; border-bottom: 1px solid var(--line-bright); }
+  .fig i { font-style: normal; color: var(--hot); }
   .card { display: flex; gap: 12px; align-items: flex-start; }
-  .cover {
-    width: 84px; height: 84px; border-radius: 10px; flex: none;
-    background: #3a4150 center/cover no-repeat; overflow: hidden;
-    display: flex; align-items: center; justify-content: center; font-size: 34px;
-  }
+  .cover { width: 84px; height: 84px; border-radius: 10px; flex: none; color: var(--accent); background: var(--inner) center/cover no-repeat; border: 1px solid var(--line); overflow: hidden; display: flex; align-items: center; justify-content: center; }
+  .cover svg { width: 38%; height: 38%; opacity: .8; }
   .cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .meta { min-width: 0; flex: 1; }
-  .name { font-size: 16px; font-weight: 700; line-height: 1.3;
-          overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .artist { font-size: 12px; color: #c5cbd6; margin-top: 2px;
-            overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  /* 卡片高度已随内容自适应（宿主量 DOM 身高）——歌词句和配文不再截断，放开长 */
-  .line { font-size: 13px; color: #9fd0c9; margin-top: 5px; line-height: 1.45; }
-  .line .t { color: #7d8595; font-size: 11px; margin-left: 6px; }
-  .note { font-size: 12px; color: #aeb6c4; margin-top: 4px; font-style: italic; }
+  .name { font-size: 16px; font-weight: 600; line-height: 1.3; letter-spacing: .02em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .artist { font-size: 12px; color: var(--soft); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .line { font-size: 13.5px; color: var(--ink); margin-top: 7px; line-height: 1.5; padding-left: 9px; border-left: 2px solid var(--hot); }
+  .line .t { font-family: ui-monospace, Menlo, monospace; color: var(--faint); font-size: 10px; letter-spacing: .1em; margin-left: 6px; }
+  .note { font-size: 12px; color: var(--soft); margin-top: 5px; font-style: italic; }
   .note[hidden], .line[hidden], button[hidden] { display: none; }
-  /* 展开=整篇铺开不搞内部滚动：手机上嵌套滚动会被外层聊天页抢走（9-01 真机），
-     反正卡片高度随 DOM 自适应，让聊天页自己滚最顺手 */
-  .lyrics { margin-top: 8px; font-size: 12px;
-            line-height: 1.7; color: #aeb6c4; border-top: 1px solid rgba(255,255,255,.08);
-            padding-top: 6px; }
-  .lyrics div.cur { color: #9fd0c9; font-weight: 700; }
-  .lyrics span.tr { color: #7d8595; font-size: 11px; margin-left: 6px; }
-  .np { margin-top: 8px; }
-  .np[hidden] { display: none; }
-  .np-bar { height: 4px; border-radius: 999px; background: rgba(255,255,255,.14); overflow: hidden; }
-  .np-fill { height: 100%; width: 0%; border-radius: 999px; background: #9fd0c9; transition: width .4s linear; }
-  .np-time { display: flex; justify-content: space-between; font-size: 10px; color: #8b93a2; margin-top: 3px; }
-  .btns { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
-  button {
-    font: inherit; font-size: 12px; color: #fff; cursor: pointer;
-    background: rgba(255,255,255,.10); border: 1px solid rgba(255,255,255,.18);
-    border-radius: 999px; padding: 5px 12px;
-  }
-  button:hover { background: rgba(255,255,255,.18); }
+  .lyrics { margin-top: 10px; font-size: 12px; line-height: 1.75; color: var(--soft); border-top: 1px solid var(--line); padding-top: 8px; }
+  .lyrics div { padding: 1px 0 1px 9px; border-left: 1px solid transparent; }
+  .lyrics div.cur { color: var(--ink); font-weight: 600; border-left-color: var(--hot); }
+  .lyrics span.tr { color: var(--faint); font-size: 11px; margin-left: 6px; }
+  .np { margin-top: 9px; } .np[hidden] { display: none; }
+  .np-bar { height: 1px; background: var(--line); }
+  .np-fill { height: 1px; width: 0%; background: var(--hot); transition: width .4s linear; position: relative; }
+  .np-fill::after { content: ""; position: absolute; right: -2px; top: -2px; width: 5px; height: 5px; border-radius: 50%; background: var(--hot); }
+  .np-time { display: flex; justify-content: space-between; margin-top: 4px; }
+  .btns { display: flex; gap: 6px; margin-top: 9px; flex-wrap: wrap; }
+  button { font: inherit; font-size: 12px; color: var(--ink); cursor: pointer; background: transparent; border: 1px solid var(--line-bright); border-radius: 999px; padding: 5px 11px 5px 9px; display: inline-flex; align-items: center; gap: 5px; letter-spacing: .02em; }
+  button svg { width: 13px; height: 13px; flex: none; }
+  button:hover { border-color: var(--accent); color: var(--accent); }
   button:disabled { opacity: .5; cursor: default; }
-  .status { font-size: 11px; color: #8b93a2; margin-top: 5px; min-height: 13px; white-space: pre-line; }
-  .foot { text-align: right; font-size: 10px; color: #6d7585; margin-top: 3px; }
+  #btn-now { background: var(--accent); border-color: var(--accent); color: #fff; } #btn-now:hover { color: #fff; opacity: .9; }
+  .status { font-size: 11px; color: var(--faint); margin-top: 6px; min-height: 13px; white-space: pre-line; }
+  .foot { display: flex; justify-content: space-between; margin-top: 8px; padding-top: 6px; border-top: 1px solid var(--line); }
 </style>
 </head>
 <body>
+<div class="fig mono"><span>FIG.<i id="fig-no">01</i> · <span id="fig-kind">SONG CARD</span></span><span>TUTOOTH · MUSIC</span></div>
 <div class="card">
-  <div class="cover" id="cover">♪</div>
+  <div class="cover" id="cover"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/></svg></div>
   <div class="meta">
     <div class="name" id="name">…</div>
     <div class="artist" id="artist"></div>
     <div class="line" id="line" hidden></div>
     <div class="note" id="note" hidden></div>
     <div class="btns">
-      <button id="btn-queue">⏯ 插进接下来播</button>
-      <button id="btn-now">▶ 立刻开播</button>
-      <button id="btn-player" hidden>🎧 打开播放器</button>
-      <button id="btn-lyrics" hidden>📜 歌词</button>
+      <button id="btn-queue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10M4 12h10M4 17h6"/><path d="M18 12v6M15 15h6"/></svg><span>插进接下来播</span></button>
+      <button id="btn-now"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true"><path d="M7 5v14l11-7z"/></svg><span>立刻开播</span></button>
+      <button id="btn-player" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12a8 8 0 0 1 16 0v4"/><path d="M4 12v4a2 2 0 0 0 2 2h1v-6H6a2 2 0 0 0-2 2z"/><path d="M20 12v4a2 2 0 0 1-2 2h-1v-6h1a2 2 0 0 1 2 2z"/></svg><span>打开播放器</span></button>
+      <button id="btn-lyrics" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><path d="M5 7h14M5 12h10M5 17h12"/></svg><span id="btn-lyrics-label">歌词</span></button>
     </div>
     <div class="np" id="np" hidden>
       <div class="np-bar"><div class="np-fill" id="np-fill"></div></div>
-      <div class="np-time"><span id="np-cur">0:00</span><span id="np-tot">0:00</span></div>
+      <div class="np-time mono"><span id="np-cur">0:00</span><span id="np-tot">0:00</span></div>
     </div>
     <div class="status" id="status"></div>
   </div>
 </div>
 <div class="lyrics" id="lyrics" hidden></div>
-<div class="foot">♪ music-mcp</div>
+<div class="foot mono"><span>MUSIC-MCP</span><span>READ WITH A STRAIGHT EDGE</span></div>
 <script>
 (function () {
   "use strict";
@@ -113,12 +107,14 @@
   function render(sc) {
     if (!sc || !sc.song) return;
     song = sc.song;
+    byId("fig-kind").textContent = sc.kind === "lyric" ? "LYRIC CARD" : "SONG CARD";
+    byId("fig-no").textContent = sc.kind === "lyric" ? "02" : "01";
     setTimeout(function () { try { npPoll(); } catch (e) {} }, 300);
     byId("name").textContent = song.name || "";
     byId("artist").textContent = song.artist + (song.album ? " · " + song.album : "");
     if (song.cover) {
       var img = new Image();
-      img.onload = function () { var c = byId("cover"); c.textContent = ""; c.appendChild(img); };
+      img.onload = function () { var c = byId("cover"); c.innerHTML = ""; c.appendChild(img); };
       img.src = String(song.cover).replace(/^http:/, "https:") + (String(song.cover).indexOf("?") < 0 ? "?param=200y200" : "");
     }
     var lineEl = byId("line");
@@ -137,7 +133,7 @@
       pb.onclick = function () { rpc("ui/open-link", { url: sc.player_url }); };
     }
     // 滚动歌词（9-01 安可:「是不是能够塞一个滚动歌词呢！」）：
-    // 点「📜 歌词」展开整篇，面板内滚动；歌词卡分享的那句高亮并居中
+    // 点「歌词」展开整篇，面板内滚动；歌词卡分享的那句高亮并居中
     if (sc.lyrics && sc.lyrics.length) {
       var panel = byId("lyrics");
       panel.innerHTML = "";
@@ -156,7 +152,7 @@
       lb.hidden = false;
       lb.onclick = function () {
         panel.hidden = !panel.hidden;
-        lb.textContent = panel.hidden ? "📜 歌词" : "📜 收起";
+        byId("btn-lyrics-label").textContent = panel.hidden ? "歌词" : "收起";
       };
     }
   }
@@ -168,9 +164,9 @@
     rpc("tools/call", { name: "song_share", arguments: { song_id: String(song.songId), mode: mode } })
       .then(function (r) {
         var txt = (r && r.content && r.content[0] && r.content[0].text) || "";
-        byId("status").textContent = txt || (label + " ✓");
+        byId("status").textContent = txt || (label + " · 好了");
       })
-      .catch(function (e) { byId("status").textContent = "❌ " + (e && e.message || "没成功"); })
+      .catch(function (e) { byId("status").textContent = "没成功：" + (e && e.message || ""); })
       .then(function () { btns.forEach(function (b) { b.disabled = false; }); });
   }
   byId("btn-queue").addEventListener("click", function () { play("queue", "已插队"); });
