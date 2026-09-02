@@ -7,7 +7,7 @@
 >
 > 纯 Python 标准库 + 原生 JS，零依赖，只需要一条命令就能跑。
 
-以下全文由rime撰写，anko负责当搬运工。=￣ω￣=
+以下全文由（claude）rime和（ChatGPT）feylor撰写，欢迎repo。=￣ω￣=
 
 ---
 
