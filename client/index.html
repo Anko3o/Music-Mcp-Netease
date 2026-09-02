@@ -670,6 +670,10 @@ body.window-mini .np-eyebrow { display: none; }
   transition: transform var(--t-slow) var(--ease-in-out);
 }
 .lyrics-view.hidden { transform: translateY(100%); pointer-events: none; }
+/* 9-02 19:57 安可：「当歌词页背景不就好了嘛」——歌词页底下一朵跟着歌转的李萨如（两个频率的比＝这首歌的一个音程），
+   1px 线，很淡；字压在花上。画布垫在最底，其余子元素抬到 z-index:1。 */
+.ly-liss { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; opacity: .35; }   /* 20:41 安可：再淡一点 */
+.lyrics-view > *:not(.ly-liss) { position: relative; z-index: 1; }
 .ly-header {
   padding: 12px 16px; display: flex; align-items: center; justify-content: space-between;
   padding-top: calc(env(safe-area-inset-top, 0px) + 12px);
@@ -1418,7 +1422,17 @@ function onAudioChange(fn) { state.listeners.add(fn); return () => state.listene
 function onSongChange(fn) { state.songListeners.add(fn); return () => state.songListeners.delete(fn); }
 
 let lastTickPost = 0;
+let bgLastPoll = 0, bgLastBeat = 0;
 audio.addEventListener('timeupdate', () => {
+  // 9-02：过半就预取下一首的地址（随机模式此时抽签）
+  if (audio.duration && audio.currentTime > audio.duration * 0.5 && !prefetchedNext) { const n = peekNext(); if (n) { if (!prefetchedNext) prefetchedNext = n; prefetchUrl(n); } }
+  // 9-02 安可：「后台插不进去歌，明明开了白名单」——setInterval 在后台会被掐成一分钟一次甚至挂起，
+  // 音频的 timeupdate 只要在放就一直响，拿它当后台的钟：5 秒一问远程点播、5 秒一报心跳
+  const now = Date.now();
+  if (document.hidden) {
+    if (now - bgLastPoll > 5000) { bgLastPoll = now; pollRemote(); }
+    if (now - bgLastBeat > 5000) { bgLastBeat = now; beatNow(); }
+  }
   state.currentTime = audio.currentTime;
   state.duration = audio.duration || 0;
   state.progress = state.duration ? audio.currentTime / state.duration : 0;
@@ -1471,6 +1485,25 @@ audio.addEventListener('ended', () => {
 });
 
 let loadSeq = 0;   // stale-guard: when songs are tapped in quick succession, late URLs are discarded
+/* ── 9-02 20:27 安可：「后台播放总是自己断」——病根在换歌：一首放完要先去要下一首地址，
+   等回来再 play，手机浏览器在后台不给「隔了一会儿才 play」放行。治法：正在放的这首过半时就把
+   下一首的地址预取好（urlCache，直链/缓存路径都存，留 15 分钟），放完那一瞬间同步切、不碰网络。 ── */
+const urlCache = new Map();          // songId → { url, direct, cache_url, at }
+let prefetchedNext = null;           // 预取时挑定的下一首（随机模式在这儿就先抽好签）
+function urlCacheGet(id) { const c = urlCache.get(String(id)); if (!c) return null; if (Date.now() - c.at > 15 * 60e3) { urlCache.delete(String(id)); return null; } return c; }
+async function prefetchUrl(song) {
+  if (!song || !song.songId || urlCacheGet(song.songId)) return;
+  try { const d = await api('/music/url?id=' + song.songId); if (d && d.url) urlCache.set(String(song.songId), { url: d.url, direct: !!d.direct, cache_url: d.cache_url || '', at: Date.now() }); } catch (_) {}
+}
+function peekNext() {
+  if (prefetchedNext) return prefetchedNext;
+  if (state.queue.length > 0) return state.queue[0];
+  if (state.ctx.length > 0) {
+    if (playMode === 'shuffle') { const i = Math.floor(Math.random() * state.ctx.length); prefetchedNext = state.ctx[i]; return prefetchedNext; }
+    return state.ctx[0];
+  }
+  return null;
+}
 async function loadAndPlay(song) {
   if (!song || !song.songId) return;
   const my = ++loadSeq;
@@ -1479,19 +1512,32 @@ async function loadAndPlay(song) {
   }
   state.song = song;
   notifySong();
+  // Stop the old track the moment we switch: lyrics follow audio.currentTime, so an old track
+  // still playing would keep scrolling the new song's lyrics.
+  try { audio.pause(); if (audio.src) audio.currentTime = 0; } catch (_) {}
   // Listen counting: POST /music/recent/add on every play.
   // 但前端从来没喊过它,批注面板里的 0x played 就是这么来的。
   if (song.songId) apiPost('/music/recent/add', { song }).catch(() => {});
-  // First play of a song downloads the full mp3 server-side (can take seconds) — show feedback.
+  // Prefetched URL hit: switch source and play synchronously (no await) so background handoff works.
+  const hit = urlCacheGet(song.songId);
+  if (hit) {
+    audio.src = hit.url; audio.play().catch(() => {});
+    if (hit.direct && hit.cache_url) armDirectFallback(my, song, hit.cache_url);
+    return;
+  }
+  // First play of a song may take a moment server-side — show feedback.
   const slow = setTimeout(() => { if (loadSeq === my) showToast('取歌中…第一次听的歌要现搬'); }, 700);
   try {
     const d = await api('/music/url?id=' + song.songId);
     clearTimeout(slow);
+    if (d && d.url) urlCache.set(String(song.songId), { url: d.url, direct: !!d.direct, cache_url: d.cache_url || '', at: Date.now() });
     if (loadSeq !== my) return;          // 她已经点了别的,这趟作废
     if (d.url) {
       // Same-origin audio requests reuse the host site's auth.
+      // Uncached songs come back as a direct CDN link (direct); fall back to the cached copy if it fails.
       audio.src = d.url;
       audio.play().catch(() => {});
+      if (d.direct && d.cache_url) armDirectFallback(my, song, d.cache_url);
     } else {
       showToast('这首没取到播放源');
     }
@@ -1500,6 +1546,24 @@ async function loadAndPlay(song) {
     if (loadSeq === my) showToast('取歌失败,再点一次试试');
     console.error('loadAndPlay error', e);
   }
+}
+
+// 直链兜底（9-02）：CDN 直链偶尔放不出来（跨域/过期/运营商），audio 报 error 时每 2 秒回 /music/url 问一次，
+// 服务器后台缓存好了就换成缓存版接着放；最多等 40 秒。
+function armDirectFallback(my, song, cacheUrl) {
+  const onErr = async () => {
+    audio.removeEventListener('error', onErr);
+    if (loadSeq !== my) return;
+    showToast('直连没放出来，等缓存…');
+    for (let i = 0; i < 20 && loadSeq === my; i++) {
+      await new Promise(r => setTimeout(r, 2000));
+      try { const d2 = await api('/music/url?id=' + song.songId); if (d2.cached && d2.url && loadSeq === my) { audio.src = d2.url; audio.play().catch(() => {}); return; } } catch (_) {}
+    }
+    if (loadSeq === my) showToast('这首暂时放不了');
+  };
+  audio.addEventListener('error', onErr, { once: true });
+  const clear = () => { audio.removeEventListener('error', onErr); audio.removeEventListener('playing', clear); };
+  audio.addEventListener('playing', clear, { once: true });
 }
 
 function togglePlay() {
@@ -1514,15 +1578,19 @@ async function playNext() {
   // Order: ① manual priority queue ② playlist context (by play mode) ③ roam fallback
   if (state.queue.length > 0) {
     if (state.song) state.history.push(state.song);
+    prefetchedNext = null;
     loadAndPlay(state.queue.shift());
     renderNpBar();
     return;
   }
   if (state.ctx.length > 0) {
     if (state.song) state.history.push(state.song);
-    const pick = playMode === 'shuffle'
-      ? state.ctx.splice(Math.floor(Math.random() * state.ctx.length), 1)[0]
-      : state.ctx.shift();
+    let pick;
+    if (playMode === 'shuffle') {
+      const i = prefetchedNext ? state.ctx.indexOf(prefetchedNext) : -1;   // 预取时抽好的签
+      pick = i >= 0 ? state.ctx.splice(i, 1)[0] : state.ctx.splice(Math.floor(Math.random() * state.ctx.length), 1)[0];
+    } else pick = state.ctx.shift();
+    prefetchedNext = null;
     loadAndPlay(pick);
     renderNpBar();
     return;
@@ -2688,13 +2756,74 @@ function openLyrics() {
   lv.classList.remove('hidden');
   renderLyricsView();
   loadLyrics();
+  lissStart();
 }
 
 function closeLyrics() {
   lyricsOpen = false;
   const lv = document.getElementById('lyrics-view');
   if (lv) lv.classList.add('hidden');
+  lissStop();
 }
+
+/* ── 歌词页的李萨如花（9-02 安可点单）──
+   x = sin(a·t + φ)，y = sin(b·t)。a:b 按这首歌的 id 从几个音程里挑一个（2:3 纯五度 / 3:4 纯四度 / 3:5 大六度 / 4:5 大三度 / 5:6 小三度），
+   φ 跟着播放进度慢慢走：歌在放，花就在转；暂停了就停在那一刻。尾迹只留最近一段，像示波器的余辉。减少动效＝静帧。 */
+const LISS_RATIOS = [[2, 3], [3, 4], [3, 5], [4, 5], [5, 6], [1, 2]];
+let lissRAF = 0, lissLast = 0, lissDrift = 0;   // lissDrift：播放时慢慢攒的相位，暂停就停在攒到的地方（20:02 安可：「暂停好鬼畜，不在原位置」）
+function lissRatio() {
+  const id = String((state.song && state.song.songId) || '0');
+  let h = 0; for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
+  return LISS_RATIOS[h % LISS_RATIOS.length];
+}
+let lissBase = null, lissBasePhi = null, lissBaseKey = '';
+function lissFrame(now) {
+  const lv = document.getElementById('lyrics-view'), cv = lv && lv.querySelector('.ly-liss');
+  if (!cv) { lissRAF = 0; return; }
+  const reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const coarse = matchMedia('(pointer: coarse)').matches;
+  if (now - lissLast > (coarse ? 33 : 16)) {                       // 手机 30fps
+    lissLast = now;
+    const DPR = Math.min(1.5, devicePixelRatio || 1), W = lv.clientWidth, H = lv.clientHeight;   // 20:41「像素太低」/20:43「一帧一帧」：1.5 倍折中
+    if (cv.width !== Math.round(W * DPR) || cv.height !== Math.round(H * DPR)) { cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR); lissBaseKey = ''; }
+    const [a, b] = lissRatio(), cs = getComputedStyle(document.documentElement);
+    const ink = cs.getPropertyValue('--rose-deep').trim() || '#984e68', rose = cs.getPropertyValue('--rose').trim() || '#c2708a';
+    const cx = W / 2, cy = H * 0.5, r = Math.min(W, H) * 0.34;
+    if (!reduce && !audio.paused) lissDrift += 0.01 * Math.min(0.1, (now - (lissFrame._t || now)) / 1000);
+    lissFrame._t = now;
+    const phi = (audio.currentTime || 0) * 0.06 + lissDrift;
+    // 底线：画在暗地里的画布上，相位变了 0.02 以上才重画（20:06 安可「有点卡」——之前每帧重画整条线）
+    const key = a + ':' + b + '|' + W + 'x' + H + '|' + DPR;
+    if (!lissBase) lissBase = document.createElement('canvas');
+    if (lissBaseKey !== key || lissBasePhi === null || Math.abs(phi - lissBasePhi) > 0.004) {   // 20:43：0.02 太稀（三分之一秒一格），0.004 ≈ 每秒十五次
+      lissBase.width = cv.width; lissBase.height = cv.height; lissBaseKey = key; lissBasePhi = phi;
+      const bx = lissBase.getContext('2d'); bx.setTransform(DPR, 0, 0, DPR, 0, 0); bx.clearRect(0, 0, W, H);
+      bx.lineWidth = 0.8; bx.strokeStyle = rose; bx.globalAlpha = 0.55; bx.beginPath();
+      for (let k = 0; k <= 320; k++) { const t = k / 320 * Math.PI * 2, x = cx + r * Math.sin(a * t + phi), y = cy + r * Math.sin(b * t); if (k) bx.lineTo(x, y); else bx.moveTo(x, y); }
+      bx.stroke();
+      bx.font = '8.5px ui-monospace, Menlo, monospace'; bx.fillStyle = ink; bx.globalAlpha = 0.5; bx.textAlign = 'right';
+      bx.fillText(`LISSAJOUS ${a}:${b}`, W - 16, H * 0.5 + r + 22); bx.globalAlpha = 1;
+    }
+    const ctx = cv.getContext('2d'); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, cv.width, cv.height); ctx.drawImage(lissBase, 0, 0);
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    // 每帧只画这一粒点和一小段余辉
+    const tp = (audio.currentTime || 0) * 0.45, seg = 60;
+    ctx.strokeStyle = ink; ctx.globalAlpha = 0.9; ctx.lineWidth = 1.1; ctx.beginPath();
+    for (let k = 0; k <= seg; k++) { const t = tp - (seg - k) * 0.006, x = cx + r * Math.sin(a * t + lissBasePhi), y = cy + r * Math.sin(b * t); if (k) ctx.lineTo(x, y); else ctx.moveTo(x, y); }
+    ctx.stroke();
+    const px = cx + r * Math.sin(a * tp + lissBasePhi), py = cy + r * Math.sin(b * tp);
+    ctx.fillStyle = '#e01f74'; ctx.globalAlpha = 1; ctx.beginPath(); ctx.arc(px, py, 2.6, 0, 7); ctx.fill();
+  }
+  lissRAF = requestAnimationFrame(lissFrame);
+}
+function lissStart() {
+  const lv = document.getElementById('lyrics-view'); if (!lv) return;
+  let cv = lv.querySelector('.ly-liss');
+  if (!cv) { cv = document.createElement('canvas'); cv.className = 'ly-liss'; cv.setAttribute('aria-hidden', 'true'); lv.insertBefore(cv, lv.firstChild); }
+  if (!lissRAF) lissRAF = requestAnimationFrame(lissFrame);
+}
+function lissStop() { if (lissRAF) cancelAnimationFrame(lissRAF); lissRAF = 0; }
+document.addEventListener('visibilitychange', () => { if (document.hidden) lissStop(); else if (lyricsOpen) lissStart(); });
 
 function renderLyricsView() {
   const lv = document.getElementById('lyrics-view');
@@ -2755,6 +2884,7 @@ function renderLyricsView() {
       </div>
       <div class="ly-time-combo"><span id="ly-time-current">${fmt(state.currentTime)}</span><i>/</i><span id="ly-time-total">${fmt(state.duration)}</span></div>
     </div>`;
+  if (lyricsOpen) lissStart();   // 9-02：整块重画会把李萨如画布抹掉，重挂
 
   // Bind events
   document.getElementById('ly-close-btn').addEventListener('click', closeLyrics);
@@ -3414,7 +3544,7 @@ function closeMv() {
 // ── Remote play: poll /music/remote every 5s for songs pushed by the companion ──
 //    /music/remote 后端一直在,客户端皮从没接过这条线。现在:5 秒一问,有歌就接。
 //    Playing → enqueue; idle → play now.
-setInterval(async () => {
+async function pollRemote() {
   try {
     const d = await api('/music/remote');
     if (!d.ok || !d.songs) return;
@@ -3433,12 +3563,13 @@ setInterval(async () => {
     }
     renderNpBar(); renderQueue();
   } catch {}
-}, 5000);
+}
+setInterval(() => { if (!document.hidden) pollRemote(); }, 5000);   // foreground: timer; background: driven by timeupdate
 
 // ── Now-playing heartbeat ──
 //    Report playback state every 5s (kept in server memory); the MCP Apps card
 //    uses it for its progress bar and live lyric highlighting.
-setInterval(() => {
+function beatNow() {
   try {
     if (!state.song || !state.song.songId) return;
     apiPost('/music/now', {
@@ -3449,7 +3580,8 @@ setInterval(() => {
       playing: !!state.playing && !audio.paused,
     }).catch(() => {});
   } catch {}
-}, 5000);
+}
+setInterval(() => { if (!document.hidden) beatNow(); }, 5000);   // foreground: timer; background: driven by timeupdate
 
 // ── Init ──
 setupMediaSession();

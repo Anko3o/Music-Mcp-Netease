@@ -630,8 +630,20 @@ class MusicHandler(BaseHTTPRequestHandler):
             if not audio_url:
                 self._send_json(200, {"ok": False, "error": "no url, may need VIP or song unavailable"})
                 return
-            self._download_audio(audio_url, cache_file)
-            self._send_json(200, {"ok": True, "url": f"/music/file/{song_id}.mp3", "cached": True})
+            # 2026-09-02 安可：「放一首歌点下去半天没反应」——原来要把整个 mp3 先拉到服务器再答复，
+            # 海外拉网易 CDN 慢，这一等就是几秒。现在拿到地址立刻把 CDN 直链交给客户端（她在国内直连最快），
+            # 服务器在后台慢慢存缓存，下次再听走 /music/file。直链放不了（跨域/过期）时客户端会回来要缓存版。
+            # 页面是 https，直链给 http 会被浏览器当混合内容拦下——网易 CDN 支持 https，硬升
+            direct_url = re.sub(r"^http://", "https://", audio_url)
+            self._send_json(200, {"ok": True, "url": direct_url, "direct": True, "cached": False,
+                                  "cache_url": f"/music/file/{song_id}.mp3"})
+            def _bg():
+                try:
+                    if not (cache_file.exists() and cache_file.stat().st_size > 0):
+                        self._download_audio(audio_url, cache_file)
+                except Exception as e:
+                    logging.warning("bg cache %s failed: %s", song_id, e)
+            threading.Thread(target=_bg, daemon=True, name=f"cache-{song_id}").start()
         except Exception as e:
             self._send_json(500, {"ok": False, "error": str(e)})
 
