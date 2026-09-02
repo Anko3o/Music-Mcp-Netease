@@ -3609,7 +3609,9 @@ function beatNow() {
     }).catch(() => {});
   } catch {}
 }
-setInterval(() => { if (!document.hidden) beatNow(); }, 5000);   // foreground: timer; background: driven by timeupdate
+setInterval(() => { if (!document.hidden) beatNow(); }, 5000);
+audio.addEventListener('seeked', () => beatNow());     // 9-03: report right after a seek so cards catch up at once
+audio.addEventListener('play', () => beatNow());   // foreground: timer; background: driven by timeupdate
 
 // ── Init ──
 setupMediaSession();

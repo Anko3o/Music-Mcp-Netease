@@ -272,6 +272,11 @@
   function seekTo(t, text) {
     if (!song) return;
     byId("status").textContent = "跳到 " + mmss(t) + " …";
+    // 9-03 00:22 安可：「进度条也跟着跳」——不等心跳，先把指针拨过去；1.5s / 4s 后再去核对
+    np.basePos = Number(t) || 0; np.baseAt = performance.now(); np.pos = np.basePos; np.playing = true; np.ok = np.ok || !!np.dur;
+    npRender();
+    setTimeout(function () { try { npPoll(); } catch (e) {} }, 1500);
+    setTimeout(function () { try { npPoll(); } catch (e) {} }, 4000);
     rpc("tools/call", { name: "song_share", arguments: { song_id: String(song.songId), mode: "now", at_seconds: Number(t) || 0 } })
       .then(function () { byId("status").textContent = "从 " + mmss(t) + " 开始放：" + (text || ""); })
       .catch(function (e) { byId("status").textContent = "没跳成：" + (e && e.message || ""); });
