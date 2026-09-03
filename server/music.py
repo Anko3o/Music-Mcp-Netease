@@ -431,6 +431,8 @@ class MusicHandler(BaseHTTPRequestHandler):
             self._handle_music_similar()
         elif path == "/music/remote":
             self._handle_music_remote_get()
+        elif path == "/music/remote/peek":
+            self._handle_music_remote_peek()
         elif path == "/music/now":
             self._handle_music_now_get()
         elif path == "/music/analyze/status":
@@ -1693,6 +1695,16 @@ class MusicHandler(BaseHTTPRequestHandler):
             self._send_json(200, {"ok": True, "songs": songs, "song": songs[0]})
         else:
             self._send_json(200, {"ok": False})
+
+    def _handle_music_remote_peek(self):
+        # 只看不取：排错用。GET /music/remote 会把队列取走，用它排错等于自己把歌吃了。
+        f = self.state.data_dir / "music_remote.json"
+        if f.exists():
+            data = json.loads(f.read_text())
+            songs = data if isinstance(data, list) else [data]
+            self._send_json(200, {"ok": True, "pending": len(songs), "songs": songs})
+        else:
+            self._send_json(200, {"ok": True, "pending": 0, "songs": []})
 
     def _handle_music_remote_post(self, body: dict):
         song = body.get("song")

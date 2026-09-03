@@ -345,10 +345,19 @@ requests.post(f"{BASE}/music/remote", headers=H, json={"song": {
 }})
 ```
 
+**AI 点了歌、播放器没反应？按这个顺序查**
+
+1. 点完歌马上 `curl -H "X-Auth-Token: $TOKEN" http://127.0.0.1:9090/music/remote/peek`。
+   - `pending` ≥ 1 且一直不减 → 歌到了服务端，是播放器没来取：播放器页面开着吗、在前台吗；
+     浏览器 F12 → Network 里 `/music/remote` 是 200 还是 403/404（走反代时最常见是反代没把这条路径转给后端，或没注入网关头）。
+   - `pending` 立刻变 0 但眼前这台没动静 → 被别处取走了：另一个标签页、另一台设备上开着的播放器，或者你自己 `curl /music/remote` 排错时把歌吃了。
+   - `pending` 一直是 0 → 歌根本没到这台服务端：MCP 的 `MUSIC_BASE` 指的是不是同一个实例（端口、data 目录）。
+2. 播放器正在放歌时，不带 `mode:"now"` 的点歌只会进「接下来播」队列，界面上是一条 toast + ▤ 面板里多一行，不会打断当前曲。想立刻听要带 `"mode":"now"`。
+
 **几点提醒**
 
 - `song` 里只有 `songId` 必填，其余不填也能播，只是播放器上没歌名封面。
-- `GET /music/remote` 是播放器专用的「取走」动作，调一次队列就空了，别拿它当查询用；看现在在放什么用 `GET /music/now`（歌、进度、是否在播，播放器 30 秒没心跳则回 `ok:false`）。
+- `GET /music/remote` 是播放器专用的「取走」动作，调一次队列就空了，别拿它当查询用（排错请用 `GET /music/remote/peek`，只看不取）；看现在在放什么用 `GET /music/now`（歌、进度、是否在播，播放器 30 秒没心跳则回 `ok:false`）。
 - 想做「先看在放什么，再决定插不插队」，就是 `/music/now` + `/music/remote` 两步。
 
 ## API 速览
@@ -371,6 +380,7 @@ requests.post(f"{BASE}/music/remote", headers=H, json={"song": {
 | `POST /music/memory` `action:"note"` | 手写批注（追加式） |
 | `POST /music/remote` `{song:{songId,…,mode?,at?}}` | 远程点播：推一首进播放器队列（见上节「直接用接口点歌」） |
 | `GET /music/now` | 播放器当前状态（歌、进度、是否在播；播放器 5s 一报心跳） |
+| `GET /music/remote/peek` | 只看不取：远程点播队列里现在攒着什么（排错用） |
 
 ## 数据与隐私
 
