@@ -292,6 +292,65 @@ handle /music/* {
 }
 ```
 
+## 不经过 AI：直接用接口点歌
+
+MCP 是给 AI 伴侣开的门；如果你想让**自己的程序**点歌（Home Assistant 按钮、群机器人、快捷指令、cron、另一个前端……），不用绕 MCP，直接打播放器后端的 HTTP 接口。MCP 里的 `song_share` 底层调的也是它。
+
+**原理**：`POST /music/remote` 只是把歌追加进服务端的小队列（`server/data/music_remote.json`，最多攒 20 首）；真正出声的是播放器页面——它前台每 1 秒、后台每 3 秒 `GET /music/remote` 取走并播放。所以**播放器页面必须开着**（手机浏览器或 PWA 都行），否则请求成功了也没人接。
+
+**鉴权**：所有 `/music/*` 都要带 token，二选一：
+
+- 本机直连：请求头 `X-Auth-Token: <server/.secret 里的那串>`（或查询参数 `?token=`）。
+- 走反代：反代自己注入 `X-Music-Gateway` 头后免 token，外部调用方只需过反代的 basic auth。
+
+**1. 搜歌，拿 `songId`**
+
+```bash
+TOKEN=$(cat server/.secret)
+curl -H "X-Auth-Token: $TOKEN" "http://127.0.0.1:9090/music/search?q=晴天%20周杰伦"
+```
+
+返回的 `songs[0].id` 就是要用的 id，顺带有 `name` / `artist` / `album` / `cover`。
+
+**2. 推给播放器**
+
+排队（播放器闲着就直接播，正在播就插进「接下来播」）：
+
+```bash
+curl -X POST http://127.0.0.1:9090/music/remote \
+  -H "X-Auth-Token: $TOKEN" -H "Content-Type: application/json" \
+  -d '{"song":{"songId":"186016","name":"晴天","artist":"周杰伦","cover":"https://..."}}'
+```
+
+立刻开播（打断当前）：加 `"mode":"now"`。从第 63 秒开始放：再加 `"at":63`（配 `mode:"now"`）。
+
+```bash
+  -d '{"song":{"songId":"186016","name":"晴天","artist":"周杰伦","mode":"now","at":63}}'
+```
+
+成功返回 `{"ok":true,"queued":1}`。
+
+**Python**
+
+```python
+import requests
+BASE, TOKEN = "http://127.0.0.1:9090", open("server/.secret").read().strip()
+H = {"X-Auth-Token": TOKEN}
+
+s = requests.get(f"{BASE}/music/search", params={"q": "晴天 周杰伦"}, headers=H).json()["songs"][0]
+requests.post(f"{BASE}/music/remote", headers=H, json={"song": {
+    "songId": s["id"], "name": s["name"], "artist": s["artist"],
+    "album": s.get("album", ""), "cover": s.get("cover", ""),
+    "mode": "now",          # 去掉这行就是排队
+}})
+```
+
+**几点提醒**
+
+- `song` 里只有 `songId` 必填，其余不填也能播，只是播放器上没歌名封面。
+- `GET /music/remote` 是播放器专用的「取走」动作，调一次队列就空了，别拿它当查询用；看现在在放什么用 `GET /music/now`（歌、进度、是否在播，播放器 30 秒没心跳则回 `ok:false`）。
+- 想做「先看在放什么，再决定插不插队」，就是 `/music/now` + `/music/remote` 两步。
+
 ## API 速览
 
 上游全部端点保留（search / url / stream / lyric / playlist(s) / recent / memory / roam …），本 fork 新增：
@@ -310,6 +369,8 @@ handle /music/* {
 | `GET /music/cover?url=` | 封面同源代理（canvas 取色用） |
 | `GET /music/card?id=&line=` | 歌曲卡图（PNG/SVG，免鉴权，给官端聊天窗当 markdown 图片） |
 | `POST /music/memory` `action:"note"` | 手写批注（追加式） |
+| `POST /music/remote` `{song:{songId,…,mode?,at?}}` | 远程点播：推一首进播放器队列（见上节「直接用接口点歌」） |
+| `GET /music/now` | 播放器当前状态（歌、进度、是否在播；播放器 5s 一报心跳） |
 
 ## 数据与隐私
 
