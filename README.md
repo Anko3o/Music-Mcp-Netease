@@ -73,7 +73,8 @@ echo "MUSIC_U=your_cookie_here" > server/.netease_cred
 python3 server/music.py          # 默认 :9090
 ```
 
-打开 `http://localhost:9090`。
+打开 `http://localhost:9090/?token=<server/.secret 里那串>`（首次启动自动生成；带一次 token 后浏览器记住，以后直接开 `localhost:9090` 即可）。
+走反代部署的不用带 token，见下文「反代示例」。
 
 ### cookie 怎么拿（`MUSIC_U`）
 
@@ -275,7 +276,7 @@ url = "http://127.0.0.1:18012/mcp"
 | `MUSIC_GATEWAY_TOKEN` | `music-gateway` | 反代内部标记：反代（如 Caddy/Nginx）注入 `X-Music-Gateway: <该值>` 头即免 token（推荐公网部署方式，由反代做鉴权，浏览器不存第二枚 token） |
 | `MUSIC_ANALYZE_PYTHON` | `python3` | 可选：听感分析用哪只 python 跑（需装 numpy，另需系统有 ffmpeg） |
 
-不走反代时，首次启动会在 `server/.secret` 生成访问 token，前端用 `?token=` 携带。
+不走反代时，首次启动会在 `server/.secret` 生成访问 token，浏览器首次用 `?token=` 打开一次即记住（localStorage），之后请求头带 `X-Auth-Token`、缓存音频走 `?token=`。
 
 ### 反代示例（Caddy）
 
@@ -347,6 +348,8 @@ requests.post(f"{BASE}/music/remote", headers=H, json={"song": {
 
 **AI 点了歌、播放器没反应？按这个顺序查**
 
+0. 不走反代、直接开 `localhost:9090` 的：浏览器第一次要用 `?token=<server/.secret>` 打开（见「快速开始」）。没带 token 时播放器每个请求都是 403，
+   而远程点播的轮询是静默吞错的——症状正是「MCP 说递到了，播放器毫无动静」。看 server 终端日志有没有一排 `GET /music/remote HTTP/1.1" 403`。
 1. 点完歌马上 `curl -H "X-Auth-Token: $TOKEN" http://127.0.0.1:9090/music/remote/peek`。
    - `pending` ≥ 1 且一直不减 → 歌到了服务端，是播放器没来取：播放器页面开着吗、在前台吗；
      浏览器 F12 → Network 里 `/music/remote` 是 200 还是 403/404（走反代时最常见是反代没把这条路径转给后端，或没注入网关头）。

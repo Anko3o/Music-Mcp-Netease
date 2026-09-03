@@ -1214,10 +1214,26 @@ const isEmbedded = (() => {
   try { return window.self !== window.top; } catch { return true; }  // 跨域取不到 top 也算嵌着
 })();
 
+// ── Auth token (direct mode only) ──
+//    走反代时反代注入网关头，浏览器不存第二枚 token（TOKEN 为空，下面全是空操作）。
+//    不走反代（直接开 localhost:9090）时：首次用 ?token=<server/.secret> 打开，存进 localStorage，
+//    之后每个 /music/* 请求带 X-Auth-Token，播放缓存文件 /music/file/* 走 ?token=（<audio> 带不了头）。
+const TOKEN = (() => {
+  try {
+    const u = new URL(location.href); const t = u.searchParams.get('token');
+    if (t) { localStorage.setItem('music-token', t); u.searchParams.delete('token'); history.replaceState(null, '', u.pathname + (u.search || '') + u.hash); return t; }
+    return localStorage.getItem('music-token') || '';
+  } catch { return ''; }
+})();
+function withToken(url) {            // 只给同源 /music/ 路径补 token；CDN 直链不动
+  if (!TOKEN || typeof url !== 'string' || !url.startsWith('/music/')) return url;
+  return url + (url.includes('?') ? '&' : '?') + 'token=' + encodeURIComponent(TOKEN);
+}
+
 // ── API helpers ──
 async function api(path, opts) {
-  // Reuses the host site's reverse-proxy auth; the browser holds no second token.
-  const res = await fetch(path, { ...opts, headers: { ...(opts?.headers || {}) } });
+  // Reuses the host site's reverse-proxy auth; the browser holds no second token unless ?token= was given (direct mode).
+  const res = await fetch(path, { ...opts, headers: { ...(opts?.headers || {}), ...(TOKEN ? { 'X-Auth-Token': TOKEN } : {}) } });
   let data = {};
   try { data = await res.json(); } catch {}
   if (!res.ok) throw new Error(data.error || `Music API ${res.status}`);
@@ -1521,7 +1537,7 @@ async function loadAndPlay(song) {
   // Prefetched URL hit: switch source and play synchronously (no await) so background handoff works.
   const hit = urlCacheGet(song.songId);
   if (hit) {
-    audio.src = hit.url; audio.play().catch(() => {});
+    audio.src = withToken(hit.url); audio.play().catch(() => {});
     if (hit.direct && hit.cache_url) armDirectFallback(my, song, hit.cache_url);
     return;
   }
@@ -1535,7 +1551,7 @@ async function loadAndPlay(song) {
     if (d.url) {
       // Same-origin audio requests reuse the host site's auth.
       // Uncached songs come back as a direct CDN link (direct); fall back to the cached copy if it fails.
-      audio.src = d.url;
+      audio.src = withToken(d.url);
       audio.play().catch(() => {});
       if (d.direct && d.cache_url) armDirectFallback(my, song, d.cache_url);
     } else {
@@ -1557,7 +1573,7 @@ function armDirectFallback(my, song, cacheUrl) {
     showToast('直连没放出来，等缓存…');
     for (let i = 0; i < 20 && loadSeq === my; i++) {
       await new Promise(r => setTimeout(r, 2000));
-      try { const d2 = await api('/music/url?id=' + song.songId); if (d2.cached && d2.url && loadSeq === my) { audio.src = d2.url; audio.play().catch(() => {}); return; } } catch (_) {}
+      try { const d2 = await api('/music/url?id=' + song.songId); if (d2.cached && d2.url && loadSeq === my) { audio.src = withToken(d2.url); audio.play().catch(() => {}); return; } } catch (_) {}
     }
     if (loadSeq === my) showToast('这首暂时放不了');
   };
