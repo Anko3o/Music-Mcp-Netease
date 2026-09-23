@@ -59,7 +59,10 @@
   .songcard { display: flex; flex-direction: column; }
   .songcard .cover { width: 100%; aspect-ratio: 1 / 1; object-fit: cover; display: block;
     background: rgba(194,112,138,.10); box-shadow: inset 0 -1px 0 var(--line); }
-  .songcard .cover.empty { display: grid; place-items: center; font-size: 42px; color: var(--rose); opacity: .55; }
+  .songcard .cover.empty { display: grid; place-items: center; color: var(--rose); opacity: .55; }
+  .songcard .cover.empty .ico { width: 26%; height: 26%; }
+  .songcard .ico, .lyriccard .ico { width: 1.05em; height: 1.05em; vertical-align: -.17em; }
+  .songcard button .ico, .lyriccard button .ico { fill: currentColor; stroke-width: 1.2; margin-left: 2px; }
   .songcard .t { display: flex; flex-direction: column; gap: 3px; min-width: 0; padding: 9px 12px 11px; }
   .songcard .n { font-weight: 600; font-size: 14px; line-height: 1.4;
     display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; word-break: break-word; }
@@ -69,12 +72,29 @@
     border: 0; border-radius: 999px; padding: 6px 12px; font-size: 12px;
     background: var(--rose); color: #fff; cursor: pointer; flex-shrink: 0;
   }
-  .lyriccard { width: 270px; padding: 12px 14px; }
-  .lyriccard .ly-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
-  .lyriccard .ly-cover { width: 34px; height: 34px; border-radius: 9px; object-fit: cover; }
-  .lyriccard .quote { border-left: 3px solid var(--rose); padding-left: 10px; margin: 6px 0 10px;
-    font-size: 13px; color: var(--rose-deep); font-style: italic; }
-  .lyriccard .at { font-size: 11px; color: var(--rose); font-variant-numeric: tabular-nums; }
+  /* 歌词卡跟歌曲卡是一家:顶上一条横幅(封面放大糊开,和播放器歌词页的背景同一个做法),
+     时间戳压在横幅上;中间那句用衬线字正着排,翻译小一号排在下面;附言另起一行;最后「跳进这句」 */
+  .msg:has(> .lyriccard) { padding: 0; overflow: hidden; width: min(78vw, 270px); }
+  .msg:has(> .lyriccard) .who { padding: 8px 12px 0; }
+  .lyriccard { display: flex; flex-direction: column; }
+  .lyriccard .ly-banner { position: relative; height: 74px; overflow: hidden;
+    display: flex; align-items: flex-end; gap: 9px; padding: 0 12px 9px;
+    background: linear-gradient(135deg, rgba(194,112,138,.35), rgba(194,112,138,.12)); }
+  .lyriccard .ly-bg { position: absolute; inset: -20px; background: center / cover no-repeat;
+    filter: blur(14px) saturate(1.15); transform: scale(1.15); }
+  .lyriccard .ly-banner::after { content: ""; position: absolute; inset: 0;
+    background: linear-gradient(to top, rgba(255,250,248,.9), rgba(255,250,248,.25)); }
+  .lyriccard .ly-cover { position: relative; z-index: 1; width: 38px; height: 38px; border-radius: 9px;
+    object-fit: cover; box-shadow: 0 3px 10px rgba(152,78,104,.22); }
+  .lyriccard .at { position: relative; z-index: 1; min-width: 0; font-size: 12px; color: var(--rose-deep);
+    font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .lyriccard .ly-main { padding: 11px 14px 13px; }
+  .lyriccard .quote { position: relative; padding-left: 16px; margin: 0 0 8px;
+    font: 500 15px/1.75 "Noto Serif SC", "Source Han Serif SC", "Songti SC", Georgia, serif; color: var(--ink); }
+  .lyriccard .quote::before { content: "“"; position: absolute; left: -2px; top: -6px;
+    font: 30px/1 Georgia, serif; color: var(--rose); opacity: .6; }
+  .lyriccard .quote small { display: block; margin-top: 3px; font-size: 12px; line-height: 1.6; color: var(--rose); }
+  .lyriccard .note { font-size: 13px; color: var(--rose-deep); margin-bottom: 9px; }
 
   /* ── 输入条 ── */
   .composer { position: fixed; left: 0; right: 0; bottom: 0; display: flex; gap: 8px;
@@ -84,6 +104,7 @@
     padding: 9px 16px; font-size: 14px; background: #fff; color: var(--ink); outline: none; }
   .composer button { border: 0; border-radius: 999px; width: 40px; height: 40px;
     font-size: 17px; background: var(--rose); color: #fff; cursor: pointer; }
+  .composer #drawerBtn { display: grid; place-items: center; }
   .composer #drawerBtn { background: rgba(194,112,138,.16); color: var(--rose-deep); }
 
   /* ── 一起听抽屉:iframe 里就是播放器本体 ── */
@@ -115,7 +136,7 @@
 <div id="msgs"></div>
 
 <div class="composer">
-  <button id="drawerBtn" title="一起听">♪</button>
+  <button id="drawerBtn" title="一起听"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/></svg></button>
   <input id="input" placeholder="说点什么…（歌词卡会以草稿落进这里）">
   <button id="sendBtn">↑</button>
 </div>
@@ -189,13 +210,19 @@ function addMsg(html, me, who) {
 }
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
+// 线图标(不用 emoji:不同系统画出来的 emoji 风格不一,和卡片的细线不搭)
+const svgIco = d => `<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+const ICO_PLAY = svgIco('<path d="M8 5.5v13l10-6.5z"/>');
+const ICO_HEAD = svgIco('<path d="M4 15v-3a8 8 0 0 1 16 0v3"/><rect x="3" y="14" width="4" height="6" rx="1.5"/><rect x="17" y="14" width="4" height="6" rx="1.5"/>');
+const ICO_NOTE = svgIco('<path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/>');
+
 // 歌曲卡:点「一起听」→ 开抽屉 + music:play
 function addSongCard(song, me, who) {
   const cov = /^https?:/.test(String(song.cover || '')) ? song.cover : '';
   const el = addMsg(`<div class="songcard">
-      ${cov ? `<img class="cover" src="${esc(cov)}" alt="">` : `<div class="cover empty">♪</div>`}
+      ${cov ? `<img class="cover" src="${esc(cov)}" alt="">` : `<div class="cover empty">${ICO_NOTE}</div>`}
       <div class="t"><div class="n">${esc(song.name)}</div><div class="a">${esc(song.artist)}</div>
-        <button>一起听 ▶</button></div>
+        <button>一起听 ${ICO_PLAY}</button></div>
     </div>`, me, who);
   el.querySelector('button').onclick = () => { openDrawer(); postToPlayer({ type: 'music:play', song }); };
 }
@@ -204,10 +231,12 @@ function addSongCard(song, me, who) {
 function addLyricCard(song, line, at, note, me, who) {
   const cov = /^https?:/.test(String(song.cover || '')) ? song.cover : '';
   const el = addMsg(`<div class="lyriccard">
-      <div class="ly-head">${cov ? `<img class="ly-cover" src="${esc(cov)}" alt="">` : ''}<div class="at">🎧 ${esc(song.name)} · ${mmss(at)}</div></div>
-      <div class="quote">${esc(line.text)}${line.trans ? `<br><small>${esc(line.trans)}</small>` : ''}</div>
-      ${note ? `<div>${esc(note)}</div>` : ''}
-      <button>跳进这句去听 ▶</button>
+      <div class="ly-banner">${cov ? `<div class="ly-bg" style="background-image:url('${esc(cov)}')"></div><img class="ly-cover" src="${esc(cov)}" alt="">` : ''}<div class="at">${ICO_HEAD} ${esc(song.name)} · ${mmss(at)}</div></div>
+      <div class="ly-main">
+        <div class="quote">${esc(line.text)}${line.trans ? `<small>${esc(line.trans)}</small>` : ''}</div>
+        ${note ? `<div class="note">${esc(note)}</div>` : ''}
+        <button>跳进这句去听 ${ICO_PLAY}</button>
+      </div>
     </div>`, me, who);
   el.querySelector('button').onclick = () => { openDrawer(); postToPlayer({ type: 'music:play', song, at }); };
 }
@@ -231,7 +260,7 @@ window.addEventListener('message', e => {
   }
   // 「聊这句」应答:整包歌词落进输入框当草稿,补完自己的话再发
   if (d.type === 'music:lyric' && d.hasLyric && d.line) {
-    $('input').value = `🎧 ${mmss(d.at)} 唱到:「${d.line.text}」 `;
+    $('input').value = `${mmss(d.at)} 唱到:「${d.line.text}」 `;
     $('input').focus();
   }
 });
@@ -247,7 +276,7 @@ $('sendBtn').onclick = send;
 $('input').addEventListener('keydown', e => { if (e.key === 'Enter') send(); });
 
 // ── 开场示范消息 ──
-addMsg('这是 chat-demo:右下角 ♪ 开「一起听」抽屉,里面就是播放器本体。\n播放器一开始放歌,顶栏会长出进度药丸。', false, 'demo');
+addMsg('这是 chat-demo:左下角的音符键开「一起听」抽屉,里面就是播放器本体。\n播放器一开始放歌,顶栏会长出进度药丸。', false, 'demo');
 addSongCard({ songId: '1428153831', name: '夜行', artist: 'ヨルシカ',
   cover: 'https://p1.music.126.net/NcyGrm4pxBOMDHTHfdG_2A==/109951164769180658.jpg' }, false, '对方');
 addLyricCard({ songId: '1428153831', name: '夜行', artist: 'ヨルシカ',
