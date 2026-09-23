@@ -204,6 +204,7 @@ curl -i https://你的域名/mcp-music-<随机串>/mcp
 | 卡片里点「立刻开播」没反应 | 播放器页面没开、退到后台、或被手机杀了 | 播放器页要开着且在前台（PWA 也算），前台每 1 秒接一次远程点播；退后台后只有正在放歌时才继续接。手机给浏览器/PWA 加「不限制后台」「电池优化白名单」，锁屏别杀它。歌不会丢：它躺在服务端队列里，播放器一回前台就接走 |
 | 直连 `localhost:9090`，什么都 403 | 浏览器没带 token | 第一次用 `?token=<server/.secret>` 打开，之后自动记住（见「快速开始」） |
 | 「打开播放器」按钮不见了 | 没配 `MUSIC_PUBLIC_URL` | 配上并重启 MCP |
+| 装进安卓 app 壳（WebView）以后，歌词页进度条拖不动 | 旧版只用 pointer 事件，壳会在手指一动时发 pointercancel 把拖动掐断 | 已修：拉最新的 `client/index.html`，进度条的触摸另挂了一套监听 |
 | 用 curl 验门回 401 | 站点整体挂了 basic auth，把这条路径也拦了 | 把 `/mcp-music-<随机串>/*` 这条 `handle` 放在 basic auth 之前，或单独排除 |
 
 **5. Claude Code**

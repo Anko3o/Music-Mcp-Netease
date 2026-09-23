@@ -52,11 +52,19 @@
   /* 歌曲卡/歌词卡:聊天里的「一起听」入口
      (white-space 要收回 normal,不然 .msg 的 pre-wrap 会把模板缩进渲染成大片空白) */
   .songcard, .lyriccard { white-space: normal; }
-  .songcard { display: flex; gap: 10px; align-items: center; padding: 10px; width: 260px; }
-  .songcard img { width: 46px; height: 46px; border-radius: 10px; object-fit: cover; }
-  .songcard .t { flex: 1; min-width: 0; }
-  .songcard .n { font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .songcard .a { font-size: 12px; color: var(--rose); }
+  /* 歌曲卡是海报样式:方封面在上铺满卡宽,歌名歌手在下,再一颗「一起听」。
+     卡片本身就是整个气泡,所以装它的 .msg 去掉内边距、裁圆角 */
+  .msg:has(> .songcard) { padding: 0; overflow: hidden; width: min(78vw, 260px); }
+  .msg:has(> .songcard) .who { padding: 8px 12px 0; }
+  .songcard { display: flex; flex-direction: column; }
+  .songcard .cover { width: 100%; aspect-ratio: 1 / 1; object-fit: cover; display: block;
+    background: rgba(194,112,138,.10); box-shadow: inset 0 -1px 0 var(--line); }
+  .songcard .cover.empty { display: grid; place-items: center; font-size: 42px; color: var(--rose); opacity: .55; }
+  .songcard .t { display: flex; flex-direction: column; gap: 3px; min-width: 0; padding: 9px 12px 11px; }
+  .songcard .n { font-weight: 600; font-size: 14px; line-height: 1.4;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; word-break: break-word; }
+  .songcard .a { font-size: 12px; color: var(--rose); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .songcard button { align-self: flex-start; margin-top: 7px; }
   .songcard button, .lyriccard button {
     border: 0; border-radius: 999px; padding: 6px 12px; font-size: 12px;
     background: var(--rose); color: #fff; cursor: pointer; flex-shrink: 0;
@@ -183,10 +191,11 @@ const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;
 
 // 歌曲卡:点「一起听」→ 开抽屉 + music:play
 function addSongCard(song, me, who) {
+  const cov = /^https?:/.test(String(song.cover || '')) ? song.cover : '';
   const el = addMsg(`<div class="songcard">
-      <img src="${esc(song.cover)}" alt="">
-      <div class="t"><div class="n">${esc(song.name)}</div><div class="a">${esc(song.artist)}</div></div>
-      <button>一起听 ▶</button>
+      ${cov ? `<img class="cover" src="${esc(cov)}" alt="">` : `<div class="cover empty">♪</div>`}
+      <div class="t"><div class="n">${esc(song.name)}</div><div class="a">${esc(song.artist)}</div>
+        <button>一起听 ▶</button></div>
     </div>`, me, who);
   el.querySelector('button').onclick = () => { openDrawer(); postToPlayer({ type: 'music:play', song }); };
 }
