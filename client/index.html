@@ -2958,14 +2958,30 @@ function bindSeekBar() {
 
   // One pointer stream works for mouse, pen, and touch, without leaking window listeners
   // every time the lyrics view is rendered.
+  // Touch gets its own non-passive listeners: inside an Android WebView app shell the touch
+  // pointer stream can be cancelled mid-drag (thumb never follows the finger). preventDefault on
+  // touchstart/touchmove keeps the whole gesture on the seek bar; pointer handlers skip touch.
   seekEl.addEventListener('pointerdown', e => {
+    if (e.pointerType === 'touch') return;
     e.preventDefault();
     seekEl.setPointerCapture?.(e.pointerId);
     onStart(e.clientX);
   });
-  seekEl.addEventListener('pointermove', e => onMove(e.clientX));
-  seekEl.addEventListener('pointerup', onEnd);
-  seekEl.addEventListener('pointercancel', onEnd);
+  seekEl.addEventListener('pointermove', e => { if (e.pointerType !== 'touch') onMove(e.clientX); });
+  seekEl.addEventListener('pointerup', e => { if (e.pointerType !== 'touch') onEnd(); });
+  seekEl.addEventListener('pointercancel', e => { if (e.pointerType !== 'touch') onEnd(); });
+  seekEl.addEventListener('touchstart', e => {
+    if (e.touches.length !== 1) return;
+    e.preventDefault();
+    onStart(e.touches[0].clientX);
+  }, { passive: false });
+  seekEl.addEventListener('touchmove', e => {
+    if (!lyricsDragging || !e.touches.length) return;
+    e.preventDefault();
+    onMove(e.touches[0].clientX);
+  }, { passive: false });
+  seekEl.addEventListener('touchend', onEnd);
+  seekEl.addEventListener('touchcancel', onEnd);
 }
 
 function updateSeekUI(ratio) {
