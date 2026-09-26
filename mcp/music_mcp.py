@@ -2,7 +2,7 @@
 """music-mcp — 点歌台 MCP 服务器（给你的 AI 伴侣用的那一半）。
 
 播放器是「两个人的」：网页那一半给人用，这一半给 AI 用。
-接上以后，AI 可以搜歌、发歌曲卡/歌词卡、把歌插进对方的播放队列、
+接上以后，AI 可以搜歌、读歌词（整篇或按区间）、发歌曲卡/歌词卡、把歌插进对方的播放队列、
 翻批注本、看对方最近在听什么、刷评论区、往共享歌单里收歌。
 
 零第三方依赖（纯标准库），Streamable HTTP，默认只听回环。
@@ -331,6 +331,132 @@ def _lyrics_for_card(song_id):
         return []
 
 
+def _trans_map(ld):
+    return {round(t["time"] * 100): t["text"] for t in parse_lrc(ld.get("tlyric") or "")}
+
+
+def _base_name(name):
+    """去掉括号后缀/「 - xxx」尾巴后的歌名，用来认「同一首歌的另一条」。"""
+    n = re.sub(r"\s*[(（\[【][^)）\]】]*[)）\]】]", " ", name or "")
+    n = re.sub(r"\s+-\s+.*$", "", n)
+    return n.strip().lower()
+
+
+def _artists(a):
+    return {x.strip().lower() for x in re.split(r"[,，/、&]", a or "") if x.strip()}
+
+
+def _lyric_with_fallback(song):
+    """拿一首歌的歌词（走 /music/lyric，吃服务器的 .lrc/.tlyric 缓存）。
+    网易云有时把词挂错条：比如 Feryquitous《Oxydlate》正主 1837817057 词是空的，词挂在同专辑、
+    标着 Instrumental 的 1837817058 上。所以正主没词时，去同专辑找去掉括号后同名、歌手有交集
+    的另一条，有词就借来。返回 (lines, trans, 借词那条 dict 或 None)；卡片跳转仍指向原来那条。"""
+    d = music_get("/music/lyric", id=song["id"])
+    lines = parse_lrc(d.get("lrc") or "")
+    if lines:
+        return lines, _trans_map(d), None
+    info = song
+    if not info.get("album") or not info.get("name"):
+        try:
+            info = resolve_song({"song_id": str(song["id"])})
+        except Exception:
+            pass
+    album, base, arts = info.get("album") or "", _base_name(info.get("name")), _artists(info.get("artist"))
+    if not album or not base:
+        return lines, {}, None
+    seen = {str(song["id"])}
+    for q in (f"{info['name']} {info.get('artist') or ''}".strip(), f"{info['name']} {album}"):
+        try:
+            cands = search_songs(q, 10)
+        except Exception:
+            continue
+        for c in cands:
+            cid = str(c.get("id"))
+            if cid in seen:
+                continue
+            seen.add(cid)
+            if c.get("album") != album or _base_name(c.get("name")) != base:
+                continue
+            if arts and _artists(c.get("artist")) and not (arts & _artists(c.get("artist"))):
+                continue
+            try:
+                cd = music_get("/music/lyric", id=cid)
+            except Exception:
+                continue
+            cl = parse_lrc(cd.get("lrc") or "")
+            if cl:
+                return cl, _trans_map(cd), c
+    return lines, {}, None
+
+
+def _mss(t):
+    t = max(0, int(t or 0))
+    return f"{t // 60}:{t % 60:02d}"
+
+
+def _secs(v, label):
+    """秒数：数字、"95"、"1:35"、"1:35.5" 都认；空就是 None。"""
+    if v is None or (isinstance(v, str) and not v.strip()):
+        return None
+    if isinstance(v, (int, float)):
+        return float(v)
+    t = str(v).strip()
+    try:
+        if ":" in t:
+            m, sec = t.split(":", 1)
+            return int(m) * 60 + float(sec)
+        return float(t)
+    except ValueError:
+        raise ValueError(f"{label} 看不懂「{v}」——给秒数（95）或「m:ss」（1:35）")
+
+
+def t_lyric_read(args):
+    lo, hi = _secs(args.get("from_seconds"), "from_seconds"), _secs(args.get("to_seconds"), "to_seconds")
+    if lo is not None and hi is not None and lo > hi:
+        raise ValueError(f"区间反了：from {_mss(lo)} 在 to {_mss(hi)} 后面")
+    song = resolve_song(args)
+    lines, trans, src = _lyric_with_fallback(song)
+    title = (song.get("name") or "（歌名没拿到）") + (f" — {song['artist']}" if song.get("artist") else "") \
+        + f"  (song_id {song['id']})"
+    if not lines:
+        return f"{title}\n网易云上这首没有歌词（纯音乐，或者还没人传词）。"
+    out = [title]
+    if src:
+        out.append(f"歌词取自 {src['id']}（{src.get('name', '')} — {src.get('artist', '')}）：网易云把词挂在了同专辑这条上；"
+                   f"用 lyric_share 发卡时跳转仍指向 {song['id']}。")
+    out.append(f"共 {len(lines)} 行，歌词到 {_mss(lines[-1]['time'])} 为止" + ("，原文 ｜ 译文" if trans else "，没有译文")
+               + "。挑好句子交给 lyric_share（match_text 最稳，at_seconds 也行）。")
+
+    def row(l, tag=""):
+        tr = trans.get(round(l["time"] * 100))
+        return f"{_mss(l['time'])}  {l['text']}" + (f" ｜ {tr}" if tr else "") + tag
+
+    if lo is None and hi is None:
+        out.append("")
+        out += [row(l) for l in lines]
+        return "\n".join(out)
+    # 只读某一段：区间内的行照常列，前后各捎一行当上下文、标出来
+    a, b = (lo if lo is not None else 0), (hi if hi is not None else float("inf"))
+    # 终点给整秒时按显示口径含满这一秒（2:30 → 2:30.99 也算），免得「2:30」那行被标成区间外
+    inb = (lambda t: int(t) <= b) if b != float("inf") and float(b).is_integer() else (lambda t: t <= b)
+    idx = [i for i, l in enumerate(lines) if a <= l["time"] and inb(l["time"])]
+    span = f"{_mss(a)}–" + (_mss(b) if hi is not None else "结尾")
+    if idx:
+        out.append(f"只看 {span}：区间内 {len(idx)} 行（前后各带一行上下文，标〔区间外〕）。")
+        first, last = idx[0], idx[-1]
+    else:
+        out.append(f"只看 {span}：这段里没有歌词行（间奏？），只给前后各一行。")
+        first = next((i for i, l in enumerate(lines) if not inb(l["time"])), len(lines))
+        last = first - 1
+    out.append("")
+    if first - 1 >= 0:
+        out.append(row(lines[first - 1], "  〔区间外·前一行〕"))
+    out += [row(lines[i]) for i in idx]
+    if last + 1 < len(lines):
+        out.append(row(lines[last + 1], "  〔区间外·后一行〕"))
+    return "\n".join(out)
+
+
 def t_song_share(args):
     song = resolve_song(args)
     mode = str(args.get("mode") or "card")
@@ -385,11 +511,9 @@ def t_song_share(args):
 
 def t_lyric_share(args):
     song = resolve_song(args)
-    d = music_get("/music/lyric", id=song["id"])
-    lines = parse_lrc(d.get("lrc") or "")
+    lines, trans, src = _lyric_with_fallback(song)   # 正主没词时借同专辑同名那条的词
     if not lines:
         raise ToolError(f"「{song['name']}」没有歌词，分享不了句子（可以改用 song_share 点整首）")
-    trans = {round(t["time"] * 100): t["text"] for t in parse_lrc(d.get("tlyric") or "")}
 
     at = args.get("at_seconds")
     match = str(args.get("match_text") or "").strip()
@@ -400,7 +524,7 @@ def t_lyric_share(args):
                 idx = i
                 break
         if idx is None:
-            raise ToolError(f"歌词里找不到「{match}」。可以先不带 match_text 调一次看整词，或换 at_seconds 定位")
+            raise ToolError(f"歌词里找不到「{match}」。可以先用 lyric_read 看整词，或换 at_seconds 定位")
     elif at is not None:
         at = float(at)
         idx = 0
@@ -448,6 +572,8 @@ def t_lyric_share(args):
     else:
         out.append(f"歌词卡已发：{song['name']} {mmss(cur['time'])}「{cur['text']}」")
         out.append("对方一点卡片就会跳进这句去听。")
+    if src:
+        out.append(f"（歌词取自 {src['id']}「{src.get('name', '')}」——网易云把词挂在了同专辑那条上；卡片跳转仍指向 {song['id']}）")
     # 分享过的句子自动收进批注本的「喜欢的句子」＝这首歌的共同回忆
     _fav(song, cur["text"] + (f"（{cur['trans']}）" if cur.get("trans") else ""))
     out.append("这句已收进批注本的「喜欢的句子」。")
@@ -729,6 +855,13 @@ TOOLS = [
          "note": {"type": "string", "description": "card 模式：卡片下的配文"},
          "memo": {"type": "string", "description": "顺手写进批注本的一句话"},
          "at_seconds": {"type": "number", "description": "mode=now 时从第几秒开始放（歌词卡点句跳转用）"}}}},
+    {"name": "lyric_read",
+     "description": "读一首歌的整篇歌词（只读，不发卡）：每行「m:ss  原文 ｜ 译文」，没有译文就只给原文。想挑一句发歌词卡时先用这个看一遍，再交给 lyric_share。可用 from_seconds / to_seconds 只读某一段（前后各带一行上下文）。正主没词时会去同专辑找同名带词的那条借来，并注明取自哪条。",
+     "inputSchema": {"type": "object", "properties": {
+         "query": {"type": "string", "description": "歌名 歌手（搜第一首）。与 song_id 二选一"},
+         "song_id": {"type": "string", "description": "网易云歌曲 id（song_search 拿到的）"},
+         "from_seconds": {"type": ["number", "string"], "description": "只读某一段时的起点：秒数或「m:ss」（如 2:00）。不给就从头"},
+         "to_seconds": {"type": ["number", "string"], "description": "只读某一段时的终点：秒数或「m:ss」（如 2:30）。不给就到结尾；两个都不给读整篇"}}}},
     {"name": "lyric_share",
      "description": "分享一句歌词（歌词卡）。卡上带时间戳，对方一点就跳进那首歌的这个段落去听。用 match_text 给那句里的几个字，或 at_seconds 给秒数定位。",
      "inputSchema": {"type": "object", "properties": {
@@ -791,7 +924,7 @@ TOOLS = [
 ]
 
 HANDLERS = {"song_search": t_song_search, "song_share": t_song_share,
-            "lyric_share": t_lyric_share, "song_memo": t_song_memo,
+            "lyric_share": t_lyric_share, "lyric_read": t_lyric_read, "song_memo": t_song_memo,
             "her_netease": t_her_netease, "memo_read": t_memo_read,
             "her_recent": t_her_recent, "song_comments": t_song_comments, "song_listen": t_song_listen,
             "playlists": t_playlists, "playlist_add": t_playlist_add}
@@ -850,7 +983,7 @@ class H(BaseHTTPRequestHandler):
             client_pv = str((msg.get("params") or {}).get("protocolVersion") or "")
             pv = client_pv if re.match(r"^20\d{2}-\d{2}-\d{2}$", client_pv) else PROTOCOL
             r = {"protocolVersion": pv, "capabilities": {"tools": {}, "resources": {}},
-                 "serverInfo": {"name": "music", "version": "1.3.0"},
+                 "serverInfo": {"name": "music", "version": "1.4.0"},
                  "instructions": (
                      "点歌台。song_share mode=now 会打断对方正在听的，仅在明确要求立刻听时用；"
                      "默认发卡片或排队。lyric_share 的卡片可点击跳进歌曲对应段落。"
