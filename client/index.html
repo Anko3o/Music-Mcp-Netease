@@ -1327,7 +1327,8 @@ html[data-ly-align="right"] .ly-scrub-go { margin: 0 8px 0 14px; }
   backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
 }
 .sm-note { padding: 10px 12px; border-radius: 14px; background: var(--milk); border: 1px solid var(--line); margin-bottom: 8px; }
-.sm-note-hd { display: flex; gap: 8px; align-items: baseline; margin-bottom: 4px; font-size: 11px; letter-spacing: .04em; color: var(--muted); }
+.sm-note-line { font-size: 13px; color: var(--accent); padding-left: 10px; border-left: 2px solid var(--accent-soft); margin-bottom: 6px; line-height: 1.5; }
+.sm-note-hd { display: flex; gap: 8px; align-items: baseline; margin-top: 6px; font-size: 11px; letter-spacing: .04em; color: var(--muted); justify-content: flex-end; }
 .sm-note-who { font-weight: 600; color: var(--accent); }
 .sm-note .sm-notes { margin: 0; padding: 0; background: none; border: 0; }
 .sm-notes {
@@ -2279,7 +2280,7 @@ function updateNavActive() {
 // ══════════════════════════════════════════
 
 // 页面里的报错 POST 回 /music/clientlog 写进服务日志，画标签页出的错也直接写在页上。
-const BUILD = '10-28 02:10';   // 版本号：每次上墙改一下，页面打开会把它连同主页间距一起报回 /music/clientlog
+const BUILD = '10-28 02:20';   // 版本号：每次上墙改一下，页面打开会把它连同主页间距一起报回 /music/clientlog
 function reportLayout(tag) {
   try {
     const r = sel => { const e = document.querySelector(sel); if (!e) return null; const b = e.getBoundingClientRect(); return [Math.round(b.left), Math.round(b.top), Math.round(b.bottom)]; };
@@ -2353,7 +2354,7 @@ function pickFloat() {
 function buildFloatCard(n) {
   if (!n) return '';
   const last = (n.noteLog && n.noteLog.length) ? n.noteLog[n.noteLog.length - 1] : null;
-  const text = (last && last.text) || n.notes || n.feeling || (n.favoriteLines && n.favoriteLines[0]) || '';
+  const text = (last && ((last.line ? '「' + last.line + '」' : '') + last.text)) || n.notes || n.feeling || (n.favoriteLines && n.favoriteLines[0]) || '';
   if (last) { n = Object.assign({}, n, { notedBy: last.by || n.notedBy, notedAt: last.at || n.notedAt }); }
   const who = n.notedBy === 'anko' ? herName() : (n.notedBy === 'fog' || n.notedBy === 'rime' || n.notedBy === 'ai') ? aiName() : (n.notedBy || '');
   let when = '';
@@ -4199,7 +4200,7 @@ function renderMemory(mv, mem, songId) {
     body += '<div class="sm-sec">批注</div>';
     noteLog.forEach(n => {
       const who = (n.by === 'fog' || n.by === 'rime' || n.by === 'ai') ? aiName() : herName();
-      body += `<div class="sm-note"><div class="sm-note-hd"><span class="sm-note-who">${esc(who)}</span>${n.at ? '<span class="sm-note-when">' + fmtDate(n.at) + '</span>' : ''}</div><div class="sm-notes">${esc(n.text)}</div></div>`;
+      body += `<div class="sm-note${n.line ? ' has-line' : ''}">${n.line ? '<div class="sm-note-line">' + esc(n.line) + '</div>' : ''}<div class="sm-notes">${esc(n.text)}</div><div class="sm-note-hd"><span class="sm-note-who">${esc(who)}</span>${n.at ? '<span class="sm-note-when">' + fmtDate(n.at) + '</span>' : ''}</div></div>`;
     });
   }
   if (mem.favoriteLines && mem.favoriteLines.length > 0) {
@@ -4235,7 +4236,7 @@ function renderMemory(mv, mem, songId) {
   const lineForNote = memoryLine; memoryLine = '';
   if (lineForNote) {
     const ta = document.getElementById('sm-notes-edit');
-    ta.value = '「' + lineForNote + '」\n';
+    ta.placeholder = '批在这句上：' + lineForNote;
     document.querySelector('.sm-write')?.scrollIntoView({ block: 'end' });
     ta.focus(); try { ta.setSelectionRange(ta.value.length, ta.value.length); } catch {}
   }
@@ -4249,7 +4250,7 @@ function renderMemory(mv, mem, songId) {
       await apiPost('/music/memory', {
         songId,
         action: 'note',
-        note: fresh,   // 只递新一笔，服务端记成一条（谁、哪天、写了什么）
+        note: fresh, line: lineForNote || '',   // 只递新一笔：批在哪句上、写了什么，服务端记成一条
         favoriteLines: favs,
         tags: document.getElementById('sm-tags-edit').value.split(/\s+/).filter(Boolean),
         name: state.song?.name || mem.name || '',

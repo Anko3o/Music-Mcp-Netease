@@ -303,15 +303,8 @@ def _memo(song, memo, line=""):
     except Exception:
         pass
     line = (line or "").strip()
-    if line:
-        memo = "「" + line + "」" + memo
-    body = {"songId": sid, "action": "note", "note": memo, "by": SIGN_AS,   # 只递新一笔，服务端记成一条
+    body = {"songId": sid, "action": "note", "note": memo, "line": line, "by": SIGN_AS,
             "name": song.get("name", ""), "artist": song.get("artist", "")}
-    if line:
-        favs = list(old.get("favoriteLines") or [])
-        if line not in favs:
-            favs.append(line)
-        body["favoriteLines"] = favs
     music_post("/music/memory", body)
 
 

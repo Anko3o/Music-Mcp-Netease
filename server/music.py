@@ -1692,9 +1692,20 @@ class MusicHandler(BaseHTTPRequestHandler):
                 elif incoming.strip() != old_notes.strip():
                     log = [{"by": by, "at": now, "text": incoming.strip()}]
             if new_text:
-                log.append({"by": by, "at": now, "text": new_text})
+                line = str(body.get("line") or "").strip()
+                m = re.match(r"^「([^」]{1,80})」\s*(.*)$", new_text, re.S)
+                if not line and m:
+                    line, new_text = m.group(1).strip(), m.group(2).strip()
+                item = {"by": by, "at": now, "text": new_text}
+                if line:
+                    item["line"] = line
+                    favs = list(entry.get("favoriteLines") or [])
+                    if line not in favs:
+                        favs.append(line)
+                    entry["favoriteLines"] = favs
+                log.append(item)
             entry["noteLog"] = log
-            entry["notes"] = "\n".join(e["text"] for e in log)
+            entry["notes"] = "\n".join(("「" + e["line"] + "」" if e.get("line") else "") + e["text"] for e in log)
             for key in ("feeling", "tags", "favoriteLines"):
                 if key in body:
                     entry[key] = body[key]
