@@ -294,7 +294,8 @@ def _fav(song, line_text):
                                  "by": SIGN_AS, "name": song.get("name", ""), "artist": song.get("artist", "")})
 
 
-def _memo(song, memo):
+def _memo(song, memo, line=""):
+    """追加一笔；line 给了就是批到某一句上：批注前面挂「那句」，那句也收进「喜欢的句子」（不重复收）。"""
     sid = str(song["id"])
     old = {}
     try:
@@ -302,9 +303,18 @@ def _memo(song, memo):
     except Exception:
         pass
     prev = (old.get("notes") or "").strip()
+    line = (line or "").strip()
+    if line:
+        memo = "「" + line + "」" + memo
     text = memo if not prev else prev + "\n" + memo
-    music_post("/music/memory", {"songId": sid, "action": "note", "notes": text, "by": SIGN_AS,
-                                 "name": song.get("name", ""), "artist": song.get("artist", "")})
+    body = {"songId": sid, "action": "note", "notes": text, "by": SIGN_AS,
+            "name": song.get("name", ""), "artist": song.get("artist", "")}
+    if line:
+        favs = list(old.get("favoriteLines") or [])
+        if line not in favs:
+            favs.append(line)
+        body["favoriteLines"] = favs
+    music_post("/music/memory", body)
 
 
 # ── 十把工具 ────────────────────────────────────────────────
@@ -472,7 +482,7 @@ def t_song_share(args):
              "album": song.get("album", ""), "cover": song.get("cover", "")}
         if mode == "now":
             s["mode"] = "now"
-            try:                                   # 9-02 安可：官端卡片上点一句歌词就跳到那句——带上秒数
+            try:                                   # 官端卡片上点一句歌词就跳到那句：带上秒数
                 at = float(args.get("at_seconds") or 0)
                 if at > 0:
                     s["at"] = at
@@ -659,10 +669,11 @@ def t_her_netease(args):
 def t_song_memo(args):
     song = resolve_song(args)
     memo = str(args.get("memo") or "").strip()
+    line = str(args.get("line") or "").strip()
     if not memo:
         raise ToolError("memo 不能是空的")
-    _memo(song, memo)
-    return f"已记进「{song['name']}」的批注本：{memo}"
+    _memo(song, memo, line)
+    return f"已记进「{song['name']}」的批注本" + (f"，批在「{line}」这句上：" if line else "：") + memo
 
 
 def t_memo_read(args):
@@ -779,6 +790,11 @@ def t_song_listen(args):
         _t.sleep(1)
     if not a:
         return "⏳ 还在听(第一次要现取歌+跑频谱),过十几秒再调一次拿结果"
+    # 真听完一遍才记进 AI 自己的「最近听的」（播放器里 AI 主页那一栏）
+    try:
+        music_post("/music/recent/add", {"by": "ai", "song": {"songId": song["id"], "name": song["name"], "artist": song["artist"], "album": song.get("album") or "", "cover": song.get("cover") or ""}})
+    except Exception:
+        pass
     dens = a.get("onsetRate") or 0
     label = "舒缓" if dens < 1.5 else ("中等" if dens < 2.2 else "密集")
     b = a.get("bands") or {}
@@ -873,11 +889,12 @@ TOOLS = [
          "note": {"type": "string", "description": "卡片下自己想说的话"},
          "memo": {"type": "string", "description": "顺手写进这首歌批注本的一句话（分享的歌词句会自动收进「喜欢的句子」，不用重复写）"}}}},
     {"name": "song_memo",
-     "description": "往一首歌的批注本记一笔（署名可配，追加不覆盖对方写的）。批注在歌词页 ✎ 面板里可见。",
+     "description": "往一首歌的批注本记一笔（署名可配，追加不覆盖对方写的）。给 line 就是批在某一句歌词上。批注在歌词页 ⋯ → 歌的批注里可见。",
      "inputSchema": {"type": "object", "properties": {
          "query": {"type": "string", "description": "歌名 歌手。与 song_id 二选一"},
          "song_id": {"type": "string"},
-         "memo": {"type": "string", "description": "要记的那句话"}},
+         "memo": {"type": "string", "description": "要记的那句话"},
+         "line": {"type": "string", "description": "批在哪句歌词上（原文一句，先用 lyric_read 看）。给了就挂在批注前面，并收进「喜欢的句子」"}},
          "required": ["memo"]}},
     {"name": "memo_read",
      "description": "翻批注本（只读）。带 query/song_id 看一首歌的完整批注（双方写的批注、喜欢的句子、听歌计数）；不带参数翻目录，列最近写过东西的歌。",
@@ -983,7 +1000,7 @@ class H(BaseHTTPRequestHandler):
             client_pv = str((msg.get("params") or {}).get("protocolVersion") or "")
             pv = client_pv if re.match(r"^20\d{2}-\d{2}-\d{2}$", client_pv) else PROTOCOL
             r = {"protocolVersion": pv, "capabilities": {"tools": {}, "resources": {}},
-                 "serverInfo": {"name": "music", "version": "1.4.0"},
+                 "serverInfo": {"name": "music", "version": "1.5.0"},
                  "instructions": (
                      "点歌台。song_share mode=now 会打断对方正在听的，仅在明确要求立刻听时用；"
                      "默认发卡片或排队。lyric_share 的卡片可点击跳进歌曲对应段落。"

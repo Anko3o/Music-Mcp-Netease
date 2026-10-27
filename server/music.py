@@ -37,8 +37,10 @@ import logging
 import mimetypes
 import os
 import random
+import os
 import re
 import secrets
+import shutil
 import subprocess
 import sys
 import threading
@@ -88,10 +90,7 @@ class MusicHandler(BaseHTTPRequestHandler):
     server_version = "Music/1.1"
 
     def log_message(self, fmt, *args):
-        # Local change (privacy): this is a single-user player; no need to audit searches.
-        # 上游把整条请求行原样记进日志，搜索词、粘进来的分享链接全在里面躺着。
-        # Paths with query strings are logged path-only.
-        # 出错还是要看得见，所以状态码照记。
+        # 访问日志不记查询串（搜索词、粘进来的分享链接都在里面），只留路径；状态码照记。
         line = fmt % args
         if "?" in line:
             head, _, tail = line.partition("?")
@@ -109,7 +108,7 @@ class MusicHandler(BaseHTTPRequestHandler):
         return json.loads(raw)
 
     def _check_auth(self) -> bool:
-        # Deployment note: public requests pass site-wide basic_auth first; the reverse proxy
+        # 反代部署：公网请求先经过同站 basic_auth，Caddy 再加固定的内部标记。
         # 后端只监听 loopback；同时校验来源地址和标记，避免浏览器保存第二枚 music token。
         if (
             self.client_address[0] in {"127.0.0.1", "::1"}
@@ -145,9 +144,18 @@ class MusicHandler(BaseHTTPRequestHandler):
         if not file_path.exists() or not file_path.is_file():
             self._send_json(404, {"error": "not found"})
             return
-        size = file_path.stat().st_size
+        st = file_path.stat()
+        size = st.st_size
         if content_type is None:
             content_type = mimetypes.guess_type(str(file_path))[0] or "application/octet-stream"
+        # 静态文件带 ETag：浏览器每次问一声，没变吃 304，变了立刻拿新的
+        etag = f'"{st.st_mtime_ns:x}-{size:x}"'
+        if self.headers.get("If-None-Match", "") == etag and not self.headers.get("Range"):
+            self.send_response(304)
+            self.send_header("ETag", etag)
+            self.send_header("Cache-Control", "no-cache, must-revalidate")
+            self.end_headers()
+            return
 
         # Range request support (needed for audio seeking)
         range_header = self.headers.get("Range")
@@ -183,6 +191,8 @@ class MusicHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(size))
         self.send_header("Accept-Ranges", "bytes")
+        self.send_header("ETag", etag)
+        self.send_header("Cache-Control", "no-cache, must-revalidate")
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Auth-Token, X-Auth")
         self.end_headers()
@@ -202,12 +212,30 @@ class MusicHandler(BaseHTTPRequestHandler):
 
     # ── Netease helpers ──
 
+    # 登录探针：MUSIC_U 过期时海外 IP 什么都取不到，前端只会报「没取到播放源」。这里问一句「我是谁」（60 秒缓存一次），
+    # 过期就明说。问不到网易就当没过期，别乱报。
+    def _netease_logged_in(self, ttl: int = 60) -> bool:
+        cache = getattr(self.state, "_login_probe", None)
+        now = time.time()
+        if cache and now - cache[1] < ttl:
+            return cache[0]
+        try:
+            a = self._netease_request("https://music.163.com/api/nuser/account/get", timeout=6)
+            ok = bool(a.get("account")) or bool(a.get("profile"))
+        except Exception:
+            ok = True
+        try:
+            self.state._login_probe = (ok, now)
+        except Exception:
+            pass
+        return ok
+
     def _netease_cookie(self) -> str:
         cred = HERE / ".netease_cred"
         try:
             for line in cred.read_text().splitlines():
                 if line.startswith("MUSIC_U="):
-                    return f"MUSIC_U={line.split('=', 1)[1].strip()}"
+                    return f"MUSIC_U={line.split('=', 1)[1].strip()}; os=pc"
         except OSError:
             pass
         return ""
@@ -357,8 +385,7 @@ class MusicHandler(BaseHTTPRequestHandler):
             return
 
         # Static: cached music files.
-        # Local change: upstream served this unauthenticated, claiming song IDs are unguessable —
-        # song ID 是公开的，谁都能枚举，等于把缓存过的歌变成公开下载站。改成照常要 token；
+        # 这里照常要 token：网易云的 song ID 是公开的，谁都能枚举，免鉴权等于把缓存过的歌变成公开下载站。
         # <audio> 标签带不了自定义 header，所以前端走 ?token= 查询参数（_check_auth 本来就认）。
         if path.startswith("/music/file/"):
             if not self._require_auth():
@@ -372,9 +399,8 @@ class MusicHandler(BaseHTTPRequestHandler):
             self._serve_static(path)
             return
 
-        # Card image: intentionally unauthenticated — the content is public Netease data
-        # (cover/title/one lyric line), and chat-app <img> tags can't carry credentials.
-        # See _handle_music_card.
+        # 卡片图：免 token——内容全是网易公开数据（封面/歌名/一句歌词），
+        # 且官端聊天窗的 <img> 带不了自定义 header。见 _handle_music_card。
         if path == "/music/card":
             self._handle_music_card()
             return
@@ -385,6 +411,20 @@ class MusicHandler(BaseHTTPRequestHandler):
 
         if path == "/music/search":
             self._handle_music_search()
+        elif path == "/music/avatar/fog":        # AI 默认头像：有 client/fog-avatar.png 就用它，没有画个音符占位
+            f = HERE.parent / "client" / "fog-avatar.png"
+            if f.exists():
+                self._send_file(f, "image/png")
+            else:
+                svg = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200"><rect width="200" height="200" rx="100" fill="#f3e9ee"/>'
+                       '<path d="M84 136V62l56-12v74" fill="none" stroke="#984e68" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>'
+                       '<circle cx="70" cy="136" r="14" fill="#984e68"/><circle cx="126" cy="124" r="14" fill="#984e68"/></svg>')
+                data = svg.encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "image/svg+xml")
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
         elif path == "/music/url":
             self._handle_music_url()
         elif path == "/music/stream":
@@ -409,6 +449,14 @@ class MusicHandler(BaseHTTPRequestHandler):
             self._handle_netease_record()
         elif path == "/music/netease/profile":
             self._handle_netease_profile()
+        elif path == "/music/netease/status":
+            self._handle_netease_status()
+        elif path == "/music/skin/bg":
+            self._handle_skin_bg_get()
+        elif path == "/music/netease/qr/new":
+            self._handle_netease_qr_new()
+        elif path == "/music/netease/qr/check":
+            self._handle_netease_qr_check()
         elif path == "/music/playlist":
             self._handle_music_playlist_get()
         elif path == "/music/playlists":
@@ -423,6 +471,8 @@ class MusicHandler(BaseHTTPRequestHandler):
             self._handle_music_daily()
         elif path == "/music/memory":
             self._handle_music_memory_get()
+        elif path == "/music/memory/noted":
+            self._handle_music_memory_noted()
         elif path == "/music/stats":
             self._handle_music_stats()
         elif path == "/music/roam":
@@ -446,7 +496,14 @@ class MusicHandler(BaseHTTPRequestHandler):
         if not self._require_auth():
             return
         path = urlparse(self.path).path
+        if path == "/music/skin/bg":          # 裸图字节，不是 JSON，得在 _read_body 之前接住
+            self._handle_skin_bg_post()
+            return
         body = self._read_body()
+        if path == "/music/clientlog":        # 前端把报错送回来写进服务日志
+            logging.warning("[client] %s | %s | %s", str(body.get("msg", ""))[:300], str(body.get("stack", ""))[:600].replace("\n", " ⏎ "), str(body.get("ua", ""))[:120])
+            self._send_json(200, {"ok": True})
+            return
 
         if path == "/music/playlist/add":
             self._handle_music_playlist_add(body)
@@ -531,7 +588,7 @@ class MusicHandler(BaseHTTPRequestHandler):
 
     # ── Music endpoint handlers ───────────────────────────────────────────────
 
-    # Local addition: paste a NetEase share link into search and it resolves the song directly.
+    # 搜索框里粘网易云分享链接就直接认出那首歌。
     # 上游只会拿整串链接当歌名去搜，铁定搜不到。分享链接常见三种长相：
     #   y.music.163.com/m/song?id=123&userid=...   （App 分享出来的）
     #   music.163.com/#/song?id=123                （网页版）
@@ -630,11 +687,14 @@ class MusicHandler(BaseHTTPRequestHandler):
             data_list = raw.get("data", [])
             audio_url = data_list[0].get("url") if data_list else None
             if not audio_url:
+                if not self._netease_logged_in():
+                    self._send_json(200, {"ok": False, "error": "netease_login_expired",
+                                          "message": "网易云登录过期了，要换一次 MUSIC_U（server/.netease_cred）"})
+                    return
                 self._send_json(200, {"ok": False, "error": "no url, may need VIP or song unavailable"})
                 return
-            # 首次播放延迟修复：原实现会把整个 mp3 拉到服务器后再答复，
-            # 跨区域拉网易 CDN 较慢；现在拿到地址后立刻把直链交给客户端，
-            # 服务器在后台慢慢存缓存，下次再听走 /music/file。直链放不了（跨域/过期）时客户端会回来要缓存版。
+            # 拿到地址立刻把 CDN 直链交给客户端（国内直连最快），服务器在后台慢慢存缓存，下次再听走 /music/file。
+            # 直链放不了（跨域/过期）时客户端会回来要缓存版。
             # 页面是 https，直链给 http 会被浏览器当混合内容拦下——网易 CDN 支持 https，硬升
             direct_url = re.sub(r"^http://", "https://", audio_url)
             self._send_json(200, {"ok": True, "url": direct_url, "direct": True, "cached": False,
@@ -742,7 +802,7 @@ class MusicHandler(BaseHTTPRequestHandler):
             cover = ""
             if pl["songs"]:
                 cover = pl["songs"][0].get("cover", "")
-            out.append({"id": pl["id"], "name": pl["name"], "count": len(pl["songs"]), "cover": cover})
+            out.append({"id": pl["id"], "name": pl["name"], "count": len(pl["songs"]), "cover": cover, "owner": pl.get("owner", "")})
         self._send_json(200, {"ok": True, "playlists": out})
 
     def _handle_music_playlists_songs(self):
@@ -765,9 +825,11 @@ class MusicHandler(BaseHTTPRequestHandler):
             return
         data = self._load_music_data()
         pl = {"id": uuid.uuid4().hex[:8], "name": name, "songs": []}
+        if body.get("owner") in ("fog", "ai"):      # AI 的歌单挂 owner=fog，住在它自己的主页（MCP 署名 ai 也认）
+            pl["owner"] = "fog"
         data["playlists"].append(pl)
         self._save_music_data(data)
-        self._send_json(200, {"ok": True, "playlist": {"id": pl["id"], "name": pl["name"], "count": 0, "cover": ""}})
+        self._send_json(200, {"ok": True, "playlist": {"id": pl["id"], "name": pl["name"], "count": 0, "cover": "", "owner": pl.get("owner", "")}})
 
     def _handle_music_playlists_rename(self, body: dict):
         pid = body.get("id", "")
@@ -837,6 +899,10 @@ class MusicHandler(BaseHTTPRequestHandler):
 
     def _handle_music_recent_get(self):
         data = self._load_music_data()
+        qs = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+        if (qs.get("by") or [""])[0] == "fog":      # AI 自己听的单独一列
+            self._send_json(200, {"ok": True, "songs": data.get("fogRecent", [])[:30]})
+            return
         self._send_json(200, {"ok": True, "songs": data.get("recent", [])[:30]})
 
     def _handle_music_recent_add(self, body: dict):
@@ -845,6 +911,15 @@ class MusicHandler(BaseHTTPRequestHandler):
             self._send_json(200, {"ok": True})
             return
         data = self._load_music_data()
+        if body.get("by") in ("fog", "ai"):         # AI 听的（song_listen 真听了一遍才记），不混进用户的最近在听、不计听歌数
+            song["cover"] = self._ensure_cover(song["songId"], song.get("cover", ""))
+            song["playedAt"] = datetime.now(timezone.utc).isoformat()
+            fr = [x for x in data.get("fogRecent", []) if str(x.get("songId")) != str(song["songId"])]
+            fr.insert(0, song)
+            data["fogRecent"] = fr[:50]
+            self._save_music_data(data)
+            self._send_json(200, {"ok": True})
+            return
         recent = data.get("recent", [])
         recent = [s for s in recent if s.get("songId") != song["songId"]]
         song["playedAt"] = datetime.now(timezone.utc).isoformat()
@@ -879,8 +954,7 @@ class MusicHandler(BaseHTTPRequestHandler):
         self._save_song_memory(mem)
         self._send_json(200, {"ok": True})
 
-    # ── Song comments ──
-    #    Uses the account cookie from .netease_cred to fetch hot + latest comments.
+    # ── 歌曲评论区：走 .netease_cred 里的账号 cookie，取网易云热评＋最新评论 ──
     #    首页(offset=0)带热评，翻页只给最新；字段裁剪到画卡要用的几项。
 
     def _handle_music_comments(self):
@@ -923,7 +997,7 @@ class MusicHandler(BaseHTTPRequestHandler):
             "comments": [trim(c) for c in (d.get("comments") or [])],
         })
 
-    # ── 封面取色代理（8-31 歌词舞台）──
+    # ── 封面取色代理 ──
     #    网易 CDN 不给 CORS 头，前端 canvas 采样封面会被「污染画布」拦住；
     #    这里同源转一手（只放行网易音乐图床），舞台模式才能按封面生成配色。
 
@@ -951,11 +1025,10 @@ class MusicHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
-    # ── Card image ──
-    #    GET /music/card?id=&line= → renders a 900×300 song card on the fly: PNG when
-    #    Pillow + a CJK font are available, otherwise a self-contained SVG (cover inlined
-    #    as base64). Meant to be pasted as a markdown image into chat apps (claude.ai /
-    #    ChatGPT connectors) that render images but not custom components.
+    # ── 卡片图 ──
+    #    GET /music/card?id=&line= → 服务端现画一张歌曲卡：有 PIL＋CJK 字体出 PNG，
+    #    没有就退自包含 SVG（封面 base64 内嵌）。给官端（claude.ai / ChatGPT 连接器）
+    #    当 markdown 图片贴——官端不渲染自定义组件，但渲染图片，卡片以图的形式回家。
 
     CARD_LINE_MAX = 60
 
@@ -967,8 +1040,8 @@ class MusicHandler(BaseHTTPRequestHandler):
             self._send_json(400, {"error": "missing or bad id"})
             return
         line = qs.get("line", [""])[0]
-        # Some clients put raw UTF-8 in the URL without percent-encoding; the request
-        # line is decoded as latin-1, so try to recover. Leave as-is if it round-trips badly.
+        # 有人不做百分号编码直接把 UTF-8 塞 URL（curl 手打就会）：请求行按 latin-1
+        # 解码后中文变乱码，这里试着还原一次，还原不动就保持原样。
         try:
             line = line.encode("latin-1").decode("utf-8")
         except (UnicodeEncodeError, UnicodeDecodeError):
@@ -1007,8 +1080,7 @@ class MusicHandler(BaseHTTPRequestHandler):
         except Exception as e:
             logger.info("card: PNG unavailable (%s), falling back to SVG", e)
             data, ext, ctype = self._draw_card_svg(name, artist, line, cover), "svg", "image/svg+xml"
-        # Don't cache a card whose cover fetch failed (transient Netease hiccup) —
-        # otherwise the coverless version gets served for a week.
+        # 封面本该有却没取到（网易偶发抽风）就别缓存，免得无封面版被端上桌 7 天
         if cover or not cover_url:
             try:
                 (cache_dir / f"{song_id}-{key}.{ext}").write_bytes(data)
@@ -1040,7 +1112,7 @@ class MusicHandler(BaseHTTPRequestHandler):
         for path in candidates:
             if not path or not Path(path).exists():
                 continue
-            # .ttc collections: prefer the Simplified-Chinese face (family name has "SC")
+            # .ttc 多面字体：优先找简体中文那一面（家族名带 SC）
             for idx in range(5):
                 try:
                     f = ImageFont.truetype(path, size, index=idx)
@@ -1129,7 +1201,7 @@ class MusicHandler(BaseHTTPRequestHandler):
                 f'{artist_el}{line_el}'
                 f'<text x="870" y="278" font-size="20" fill="#8b93a2" text-anchor="end">♪ music-mcp</text></svg>').encode("utf-8")
 
-    # ── MV playback ──
+    # ── MV ──
     #    songId → song/detail 拿 mv id → mv/detail 拿各清晰度片源。
     #    片源是网易 CDN 的 mp4，https 化后 <video> 直接吃。
 
@@ -1142,7 +1214,7 @@ class MusicHandler(BaseHTTPRequestHandler):
         try:
             d = self._netease_request(f"https://music.163.com/api/song/detail?ids=[{song_id}]")
             s0 = (d.get("songs") or [{}])[0]
-            # 8-31 排障:老 API 这里叫 mvid,新 API 才叫 mv——两个都认
+            # 老 API 这里叫 mvid，新 API 才叫 mv——两个都认
             mv_id = s0.get("mvid") or s0.get("mv") or 0
         except Exception:
             self._send_json(502, {"error": "查不到这首歌"})
@@ -1168,8 +1240,7 @@ class MusicHandler(BaseHTTPRequestHandler):
                               "duration": data.get("duration", 0),
                               "url": best, "urls": urls})
 
-    # ── Account playlist mirror ──
-    #    Read-only mirror of the cookie account's playlists; never modifies cloud data.
+    # ── 网易云歌单同步：只读镜像，列歌单/取曲目，不改不删云端的任何东西 ──
 
     def _handle_netease_playlists(self):
         try:
@@ -1221,9 +1292,25 @@ class MusicHandler(BaseHTTPRequestHandler):
         self._send_json(200, {"ok": True, "id": p.get("id"), "name": p.get("name", ""),
                               "total": p.get("trackCount", 0), "songs": songs})
 
-    # ── Daily recommendations ──
+    # ── 网易云日推 ──
+    # 日推和账号档案半小时内不会变，进程里记一份：日推 30 分钟、档案 10 分钟；前端那边还有自己的十分钟缓存。
+    _TTL_CACHE: dict[str, tuple[float, Any]] = {}
+
+    def _ttl_get(self, key: str, ttl: float):
+        hit = self._TTL_CACHE.get(key)
+        if hit and time.time() - hit[0] < ttl:
+            return hit[1]
+        return None
+
+    def _ttl_put(self, key: str, payload):
+        self._TTL_CACHE[key] = (time.time(), payload)
+        return payload
 
     def _handle_netease_daily(self):
+        cached = self._ttl_get("ne_daily", 30 * 60)
+        if cached is not None:
+            self._send_json(200, cached)
+            return
         try:
             d = self._netease_request("https://music.163.com/api/v3/discovery/recommend/songs")
         except Exception:
@@ -1239,11 +1326,10 @@ class MusicHandler(BaseHTTPRequestHandler):
                 "cover": str(al.get("picUrl") or "").replace("http://", "https://", 1),
                 "reason": t.get("reason", ""),
             })
-        self._send_json(200, {"ok": True, "songs": songs})
+        self._send_json(200, self._ttl_put("ne_daily", {"ok": True, "songs": songs}))
 
-    # ── Two-way heart (like) sync ──
-    #    读:song/like/get 全量红心 id。写:song/like 老口(实测 200;radio/like 会被
-    #    -460 risk-control; do not switch back). Writes to the cookie account's own liked list.
+    # ── 网易云红心同步 ──
+    #    读：song/like/get 全量红心 id。写：song/like 老口（radio/like 会被风控 -460，别换）。写进的是登录账号的「喜欢的音乐」。
 
     def _handle_netease_likes_get(self):
         try:
@@ -1273,8 +1359,7 @@ class MusicHandler(BaseHTTPRequestHandler):
 
 
     def _handle_netease_scrobble(self, body: dict):
-        """听歌记账上报：
-        把一次播放写回网易云官方客户端同款的 weblog 口,听歌量/年度时长才吃得到这里的播放。
+        """听歌记账上报：把一次播放写回网易云官方客户端同款的 weblog 口，听歌量/年度时长才吃得到这里的播放。
         end='playend' 自然听完,'ui' 中途切歌——都按实际播放秒数记。"""
         song_id = str(body.get("songId") or "")
         try:
@@ -1301,8 +1386,7 @@ class MusicHandler(BaseHTTPRequestHandler):
 
 
     def _handle_netease_record(self):
-        """听歌排行拉取：
-        网易云的单曲累计播放榜,type=0 总榜 / 1 最近一周。只读。"""
+        """听歌排行拉取：网易云的单曲累计播放榜，type=0 总榜 / 1 最近一周。只读。"""
         qs = parse_qs(urlparse(self.path).query)
         rtype = 1 if qs.get("type", ["0"])[0] == "1" else 0
         try:
@@ -1332,7 +1416,11 @@ class MusicHandler(BaseHTTPRequestHandler):
 
 
     def _handle_netease_profile(self):
-        """账号档案：昵称、听歌量、等级、入网天数，只读。"""
+        """账号档案：昵称/听歌量/等级/入网天数，只读。"""
+        cached = self._ttl_get("ne_profile", 10 * 60)
+        if cached is not None:
+            self._send_json(200, cached)
+            return
         try:
             acc = self._netease_request("https://music.163.com/api/nuser/account/get")
             uid = (acc.get("profile") or {}).get("userId")
@@ -1344,12 +1432,151 @@ class MusicHandler(BaseHTTPRequestHandler):
             self._send_json(502, {"error": "账号档案拉取失败"})
             return
         prof = d.get("profile") or {}
-        self._send_json(200, {"ok": True, "profile": {
+        self._send_json(200, self._ttl_put("ne_profile", {"ok": True, "profile": {
             "userId": uid, "nickname": prof.get("nickname", ""),
             "listenSongs": d.get("listenSongs", 0), "level": d.get("level", 0),
             "createDays": d.get("createDays", 0),
+            "follows": prof.get("follows", 0), "followeds": prof.get("followeds", 0),
+            "avatar": prof.get("avatarUrl", ""),
             "signature": prof.get("signature", ""),
-        }})
+        }}))
+
+    # ── 网易云扫码登录 ──
+    # 网易的裸 /api/ 接口不加密也给二维码钥匙和轮询结果：unikey → app 扫 music.163.com/login?codekey=KEY
+    # → 轮询 client/login：801 等扫、802 扫了没确认、803 成功（Set-Cookie 带 MUSIC_U）、800 过期。
+    # 成功就把 MUSIC_U 写回 .netease_cred（旧的留 .bak），登录探针缓存清掉，横幅自己灭。
+    def _netease_plain_post(self, url: str, form: dict[str, Any], timeout: int = 8):
+        """不带旧 cookie 的裸 POST，回 (json, Set-Cookie 列表)。扫码那几步要看响应头，走不了 _netease_request。"""
+        req = urllib.request.Request(url, data=urlencode(form).encode(), headers={
+            "Referer": "https://music.163.com/",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "Content-Type": "application/x-www-form-urlencoded",
+        })
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return json.loads(resp.read()), (resp.headers.get_all("Set-Cookie") or [])
+
+    def _handle_netease_qr_new(self):
+        key = None
+        try:
+            d, _ = self._netease_plain_post("https://music.163.com/api/login/qrcode/unikey", {"type": 3})
+            key = d.get("unikey")
+        except Exception:
+            key = None
+        if not key:
+            self._send_json(502, {"error": "网易没给二维码钥匙"})
+            return
+        self._send_json(200, {"ok": True, "key": key, "url": f"https://music.163.com/login?codekey={key}"})
+
+    def _handle_netease_qr_check(self):
+        qs = parse_qs(urlparse(self.path).query)
+        key = (qs.get("key") or [""])[0].strip()
+        if not re.fullmatch(r"[0-9a-zA-Z-]{10,64}", key):
+            self._send_json(400, {"error": "bad key"})
+            return
+        try:
+            d, cookies = self._netease_plain_post(
+                "https://music.163.com/api/login/qrcode/client/login", {"key": key, "type": 3})
+        except Exception:
+            self._send_json(502, {"error": "问不到网易"})
+            return
+        code = d.get("code")
+        out: dict[str, Any] = {"ok": True, "code": code, "message": d.get("message", "")}
+        if code == 803:
+            music_u = ""
+            for c in cookies:
+                m = re.match(r"\s*MUSIC_U=([^;]+)", c)
+                if m:
+                    music_u = m.group(1).strip()
+            if not music_u:
+                self._send_json(502, {"error": "登录成功但响应里没有 MUSIC_U"})
+                return
+            self._save_music_u(music_u)
+            try:
+                a = self._netease_request("https://music.163.com/api/nuser/account/get", timeout=6)
+                out["nickname"] = ((a.get("profile") or {}).get("nickname")) or ""
+            except Exception:
+                out["nickname"] = ""
+        self._send_json(200, out)
+
+    def _save_music_u(self, music_u: str):
+        """MUSIC_U 写回 .netease_cred：旧文件留一份 .bak-时间，其它行原样保留，权限 600，原子替换。"""
+        cred = HERE / ".netease_cred"
+        lines: list[str] = []
+        try:
+            lines = cred.read_text().splitlines()
+        except OSError:
+            lines = []
+        if lines:
+            try:
+                shutil.copy2(cred, HERE / f".netease_cred.bak-{time.strftime('%Y%m%d-%H%M')}")
+            except Exception:
+                pass
+        kept = [ln for ln in lines if not ln.startswith("MUSIC_U=")]
+        kept.insert(0, f"MUSIC_U={music_u}")
+        tmp = cred.with_name(".netease_cred.tmp")
+        tmp.write_text("\n".join(kept) + "\n")
+        os.chmod(tmp, 0o600)
+        os.replace(tmp, cred)
+        try:
+            self.state._login_probe = None
+        except Exception:
+            pass
+
+    # ── 自定义皮肤的底图：自己传一张图当整页的底 ──
+    # 一个家一张图，存 data/skin-bg.img（旁边 skin-bg.json 记 mime），手机电脑抽屉共用。
+    # POST 裸图字节（Content-Type image/*，8MB 封顶）；POST 空身子＝去掉。GET 原样吐出来给 CSS 当背景。
+    def _skin_bg_paths(self):
+        return self.state.data_dir / "skin-bg.img", self.state.data_dir / "skin-bg.json"
+
+    def _handle_skin_bg_get(self):
+        img, meta = self._skin_bg_paths()
+        if not img.exists():
+            self._send_json(404, {"error": "no skin bg"})
+            return
+        mime = "image/jpeg"
+        try:
+            mime = json.loads(meta.read_text()).get("mime") or mime
+        except Exception:
+            pass
+        self._send_file(img, mime)
+
+    def _handle_skin_bg_post(self):
+        img, meta = self._skin_bg_paths()
+        length = int(self.headers.get("Content-Length", 0) or 0)
+        if length <= 0:
+            for p in (img, meta):
+                try:
+                    p.unlink()
+                except OSError:
+                    pass
+            self._send_json(200, {"ok": True, "cleared": True})
+            return
+        if length > 8 * 1024 * 1024:
+            self._send_json(413, {"error": "图太大了，8MB 以内"})
+            return
+        mime = (self.headers.get("Content-Type") or "").split(";")[0].strip().lower()
+        if mime not in {"image/jpeg", "image/png", "image/webp", "image/gif"}:
+            self._send_json(415, {"error": "只收 jpg / png / webp / gif"})
+            return
+        raw = self.rfile.read(length)
+        self.state.data_dir.mkdir(parents=True, exist_ok=True)
+        tmp = img.with_suffix(".tmp")
+        tmp.write_bytes(raw)
+        os.replace(tmp, img)
+        meta.write_text(json.dumps({"mime": mime, "size": len(raw), "at": int(time.time())}))
+        self._send_json(200, {"ok": True, "url": f"/music/skin/bg?v={int(time.time())}", "size": len(raw)})
+
+    def _handle_netease_status(self):
+        """主页「网易云」那行用：登没登录、叫什么。"""
+        ok = self._netease_logged_in(ttl=0)
+        nick = ""
+        if ok:
+            try:
+                a = self._netease_request("https://music.163.com/api/nuser/account/get", timeout=6)
+                nick = ((a.get("profile") or {}).get("nickname")) or ""
+            except Exception:
+                nick = ""
+        self._send_json(200, {"ok": True, "logged_in": ok, "nickname": nick})
 
     # ── Song memory system ──
 
@@ -1359,9 +1586,48 @@ class MusicHandler(BaseHTTPRequestHandler):
         mem = self._load_song_memory()
         if song_id:
             entry = mem.get(str(song_id))
+            if entry and not entry.get("cover"):          # 批注本歌头卡要封面：借浮现那套进程内缓存补一张
+                cache = getattr(self.state, "_noted_cover", None)
+                if cache is None:
+                    cache = {}
+                    try:
+                        self.state._noted_cover = cache
+                    except Exception:
+                        pass
+                c = cache.get(str(song_id)) or self._ensure_cover(song_id, "")
+                cache[str(song_id)] = c
+                entry = dict(entry, cover=c)
             self._send_json(200, {"ok": True, "memory": entry})
         else:
             self._send_json(200, {"ok": True, "memories": mem})
+
+    # ── 批注浮现 ──
+    # 只挑写过字的（notes / feeling / favoriteLines 任一非空），补上封面（song/detail 取一次，进程内缓存）。
+    def _handle_music_memory_noted(self):
+        mem = self._load_song_memory()
+        cache = getattr(self.state, "_noted_cover", None)
+        if cache is None:
+            cache = {}
+            try:
+                self.state._noted_cover = cache
+            except Exception:
+                pass
+        out = []
+        for sid, e in mem.items():
+            if not (e.get("notes") or e.get("feeling") or e.get("favoriteLines")):
+                continue
+            cover = e.get("cover") or cache.get(str(sid)) or ""
+            if not cover:
+                cover = self._ensure_cover(sid, "")
+                cache[str(sid)] = cover
+            out.append({
+                "songId": e.get("songId") or sid, "name": e.get("name", ""), "artist": e.get("artist", ""),
+                "notes": e.get("notes", ""), "feeling": e.get("feeling", ""), "favoriteLines": e.get("favoriteLines") or [],
+                "notedBy": e.get("notedBy", ""), "notedAt": e.get("notedAt", ""), "listenCount": e.get("listenCount", 0),
+                "cover": cover,
+            })
+        out.sort(key=lambda x: x.get("notedAt") or "", reverse=True)
+        self._send_json(200, {"ok": True, "songs": out})
 
     def _handle_music_memory_save(self, body: dict):
         song_id = str(body.get("songId", ""))
@@ -1410,8 +1676,7 @@ class MusicHandler(BaseHTTPRequestHandler):
             if body.get("duration"):
                 entry["duration"] = body["duration"]
         elif action == "note":
-            # Hand-written notes: upstream locked notes behind spectrum analysis;
-            # 后面（librosa 还没装，等于从出生就锁死）；现在人手直接写，不设门槛。
+            # 批注是手写的，不设门槛。
             for key in ("notes", "feeling", "tags", "favoriteLines"):
                 if key in body:
                     entry[key] = body[key]
@@ -1617,7 +1882,7 @@ class MusicHandler(BaseHTTPRequestHandler):
     def _handle_music_profile_update(self, body: dict):
         data = self._load_music_data()
         profile = data.get("profile", {})
-        for k in ("avatar", "signature", "name"):
+        for k in ("avatar", "signature", "name", "fogAvatar", "fogName", "fogNick", "fogSig"):   # fog*：AI 那颗头像/名字/签名
             if k in body:
                 profile[k] = body[k]
         data["profile"] = profile
@@ -1660,10 +1925,9 @@ class MusicHandler(BaseHTTPRequestHandler):
 
     # ── Remote play ──
 
-    # ── Now-playing heartbeat ──
-    #    The player POSTs its playback state every 5s; kept in memory only.
-    #    The MCP's music://now resource relays it to the Apps card for the
-    #    progress bar and live lyric highlighting.
+    # ── Now-playing 心跳 ──
+    #    播放器每 5 秒 POST 一次当前播放状态，存内存不落盘；
+    #    MCP 的 music://now 资源转手给官端 Apps 卡片画进度条＋跟唱高亮。
 
     def _handle_music_now_post(self, body: dict):
         self.state.now_playing = {
@@ -1685,19 +1949,20 @@ class MusicHandler(BaseHTTPRequestHandler):
         self._send_json(200, dict(now, ok=True, age=round(time.time() - now.get("at", 0), 1)))
 
     def _handle_music_remote_get(self):
-        # 8-31 升级成小队列:上游是单曲文件、后到覆盖先到;现在攒成列表一次全交,
-        # Queue survives multiple rapid pushes. Backward compatible with the old single-song format.
+        # 远程点播攒成列表一次全交，连插几首也不丢。兼容旧单曲格式（dict 就包成 [dict]）。
         f = self.state.data_dir / "music_remote.json"
+        # 客户端本来就每秒问这条线，顺路把登录态捎回去（10 分钟才真问一次网易），前端的过期横幅跟着它亮灭。
+        login = self._netease_logged_in(ttl=600)
         if f.exists():
             data = json.loads(f.read_text())
             f.unlink()
             songs = data if isinstance(data, list) else [data]
-            self._send_json(200, {"ok": True, "songs": songs, "song": songs[0]})
+            self._send_json(200, {"ok": True, "songs": songs, "song": songs[0], "netease_login": login})
         else:
-            self._send_json(200, {"ok": False})
+            self._send_json(200, {"ok": False, "netease_login": login})
 
     def _handle_music_remote_peek(self):
-        # 只看不取：排错用。GET /music/remote 会把队列取走，用它排错等于自己把歌吃了。
+        # 只看不取：排错用。GET /music/remote 会把队列取走。
         f = self.state.data_dir / "music_remote.json"
         if f.exists():
             data = json.loads(f.read_text())

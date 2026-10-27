@@ -40,6 +40,15 @@
 - 🫶 **听歌计数与排行榜** — 听过几次、排行榜有什么，都能知道
 - 📱 移动端优先，可嵌 iframe 当聊天页的「一起听」抽屉（`music:*` postMessage 协议）
 
+> **更新 · 2026-10-27**：这两个月主要在改脸。
+> - 🎨 **三套皮肤**：粉 / 黑白 / 自定义（自己传底图），右上角齿轮进设置：背景浓淡、模糊、主题色各皮各记
+> - 🏠 **主页**：网易云头像卡（昵称、听歌数、等级、关注、粉丝）＋两个人的专辑和歌单；底栏 Home / Daily / Recent 三页，第三页顶上随机浮现一条批注
+> - 👥 **两个人**：设置里填你和 AI 的名字、头像、签名，页面上所有署名都从这里读；AI 有自己的主页（它挑的歌单、它真听过的歌），主页昵称和署名可以不一样
+> - 🎤 **歌词页重做**：照 Apple Music 的粗体靠左、当下句清楚其它行糊，封面页 / 歌词页同视图翻页；五颗钮收进右上角一颗 ⋯，底部玻璃抽屉可拖；长按一句能批注，也能递给对方
+> - 📱 **嵌进聊天页更顺**：半屏 / 全屏拖动不闪、分享走输入框草稿、队列面板画出歌单上下文
+> - ⚡ **更快**：前端接口十分钟缓存、服务端日推和账号档案缓存，换页不再转圈；网易云扫码登录
+> - 🧹 代码里的施工注释清干净了，开源该有的样子
+
 ## 长什么样
 
 先看两张真机实拍（by 搬运工本人）：
@@ -50,15 +59,21 @@
 
 > \* 说明：MV 悬浮小窗是系统级画中画（本仓库自带，盖在哪个 App 上都行）；图里底下那层聊天页是我们自己家的前端，不随仓库发布——但它的「一起听」对接层（抽屉、进度药丸、歌曲卡、歌词卡）已浓缩成零依赖示范页 [`examples/chat-demo/`](./examples/chat-demo/)，协议速查也在那页 README 里，接上你家的聊天系统就能长成这样。
 
-再来棚拍全家福：
+再来棚拍全家福（10-27 版，左粉右黑白，同一页两套皮）：
 
-| ☁️ 网易云日推 · 带推荐理由 | 🎤 歌词页 · 逐字点亮 + 翻译 |
+| 🏠 主页 · 网易云头像卡＋两个人的歌单 | 🏠 主页 · 黑白皮 |
 |:--:|:--:|
-| <img src="screenshots/01-discover.png" width="390" alt="每日推荐"> | <img src="screenshots/03-lyrics.png" width="390" alt="歌词页"> |
+| <img src="screenshots/10-home-rose.png" width="390" alt="主页"> | <img src="screenshots/10-home-mono.png" width="390" alt="主页 黑白"> |
+| **💿 封面页 · 通栏封面、底边淡出** | **💿 封面页 · 黑白皮** |
+| <img src="screenshots/11-cover-rose.png" width="390" alt="封面页"> | <img src="screenshots/11-cover-mono.png" width="390" alt="封面页 黑白"> |
+| **🎤 歌词页 · 粗体靠左、当下句清楚其它行糊** | **🎤 歌词页 · 黑白皮** |
+| <img src="screenshots/12-lyrics-rose.png" width="390" alt="歌词页"> | <img src="screenshots/12-lyrics-mono.png" width="390" alt="歌词页 黑白"> |
+| **⋯ 抽屉 · 收藏 / 加歌单 / 分享 / 批注 / 评论 / MV / 排布** | **⋯ 抽屉 · 黑白皮** |
+| <img src="screenshots/13-sheet-rose.png" width="390" alt="抽屉"> | <img src="screenshots/13-sheet-mono.png" width="390" alt="抽屉 黑白"> |
 | **✎ 批注本 · 两个人的听歌回忆** | **💬 歌曲评论区 · 热评＋最新** |
-| <img src="screenshots/04-notes.png" width="390" alt="批注本"> | <img src="screenshots/05-comments.png" width="390" alt="评论区"> |
-| **📋 本地歌单 · AI 也能往里收歌** | **🎬 MV 放映厅 · 可悬浮小窗** |
-| <img src="screenshots/02-playlists.png" width="390" alt="歌单"> | <img src="screenshots/06-mv.png" width="390" alt="MV"> |
+| <img src="screenshots/14-memo-rose.png" width="390" alt="批注本"> | <img src="screenshots/14-comments-mono.png" width="390" alt="评论区"> |
+
+8-31 的旧图还在 `screenshots/01`–`06`，MV 放映厅长什么样看 `06-mv.png`。
 
 ## 快速开始
 
@@ -121,6 +136,7 @@ python3 mcp/music_mcp.py         # 默认 127.0.0.1:18012
 | `playlist_add` | 把歌收进某个歌单（防重复，署名可配） |
 
 > 更新 · 2026-09-26（MCP v1.4.0）：新增读歌词小工具 `lyric_read`，可整篇或按区间。
+> 更新 · 2026-10-27（MCP v1.5.0）：`song_memo` 多了 `line`，可以批在某一句歌词上（那句同时收进「喜欢的句子」）；`song_listen` 真听完一遍会记进 AI 主页的「最近听的」。
 
 MCP 环境变量：
 
@@ -389,6 +405,13 @@ requests.post(f"{BASE}/music/remote", headers=H, json={"song": {
 | `POST /music/remote` `{song:{songId,…,mode?,at?}}` | 远程点播：推一首进播放器队列（见上节「直接用接口点歌」） |
 | `GET /music/now` | 播放器当前状态（歌、进度、是否在播；播放器 5s 一报心跳） |
 | `GET /music/remote/peek` | 只看不取：远程点播队列里现在攒着什么（排错用） |
+| `GET/POST /music/profile` | 两个人的名字、头像、签名（`name/avatar/signature` 是你的，`fogName/fogNick/fogAvatar/fogSig` 是 AI 的） |
+| `GET /music/recent?by=ai` · `POST /music/recent/add` | AI 自己听过的歌（`song_listen` 真听了才记），不混进你的最近在听 |
+| `GET /music/memory/noted` | 写过批注的歌（第三页「批注浮现」用） |
+| `GET /music/netease/profile` | 账号档案：昵称、听歌数、等级、关注、粉丝 |
+| `GET /music/netease/qr/new` · `/qr/check` · `/status` | 网易云扫码登录与登录态 |
+| `POST /music/skin/bg` | 自定义皮上传底图（固定文件名原地覆盖，不囤） |
+| `POST /music/clientlog` | 前端报错回传（手机上看不到控制台时用） |
 
 ## 数据与隐私
 
