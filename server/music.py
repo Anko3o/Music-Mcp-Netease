@@ -1622,7 +1622,7 @@ class MusicHandler(BaseHTTPRequestHandler):
                 cache[str(sid)] = cover
             out.append({
                 "songId": e.get("songId") or sid, "name": e.get("name", ""), "artist": e.get("artist", ""),
-                "notes": e.get("notes", ""), "feeling": e.get("feeling", ""), "favoriteLines": e.get("favoriteLines") or [],
+                "notes": e.get("notes", ""), "noteLog": e.get("noteLog") or [], "feeling": e.get("feeling", ""), "favoriteLines": e.get("favoriteLines") or [],
                 "notedBy": e.get("notedBy", ""), "notedAt": e.get("notedAt", ""), "listenCount": e.get("listenCount", 0),
                 "cover": cover,
             })
@@ -1676,13 +1676,31 @@ class MusicHandler(BaseHTTPRequestHandler):
             if body.get("duration"):
                 entry["duration"] = body["duration"]
         elif action == "note":
-            # 批注是手写的，不设门槛。
-            for key in ("notes", "feeling", "tags", "favoriteLines"):
+            # 批注一条一条记在 noteLog（谁、哪天、写了什么），notes 只是它们拼起来的备份。
+            by = body.get("by", "anko")
+            log = list(entry.get("noteLog") or [])
+            if not log and entry.get("notes"):
+                log = [{"by": entry.get("notedBy", "anko"), "at": entry.get("notedAt"), "text": entry["notes"]}]
+            new_text = ""
+            if body.get("note"):
+                new_text = str(body["note"]).strip()
+            elif "notes" in body:
+                old_notes = entry.get("notes") or ""
+                incoming = str(body["notes"])
+                if incoming.startswith(old_notes):
+                    new_text = incoming[len(old_notes):].strip("\n").strip()
+                elif incoming.strip() != old_notes.strip():
+                    log = [{"by": by, "at": now, "text": incoming.strip()}]
+            if new_text:
+                log.append({"by": by, "at": now, "text": new_text})
+            entry["noteLog"] = log
+            entry["notes"] = "\n".join(e["text"] for e in log)
+            for key in ("feeling", "tags", "favoriteLines"):
                 if key in body:
                     entry[key] = body[key]
             entry["name"] = body.get("name", entry.get("name", ""))
             entry["artist"] = body.get("artist", entry.get("artist", ""))
-            entry["notedBy"] = body.get("by", "anko")
+            entry["notedBy"] = by
             entry["notedAt"] = now
         elif action == "like":
             entry["liked"] = True

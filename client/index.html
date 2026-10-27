@@ -1326,6 +1326,10 @@ html[data-ly-align="right"] .ly-scrub-go { margin: 0 8px 0 14px; }
   border-radius: 18px; border-left: 3px solid var(--accent);
   backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
 }
+.sm-note { padding: 10px 12px; border-radius: 14px; background: var(--milk); border: 1px solid var(--line); margin-bottom: 8px; }
+.sm-note-hd { display: flex; gap: 8px; align-items: baseline; margin-bottom: 4px; font-size: 11px; letter-spacing: .04em; color: var(--muted); }
+.sm-note-who { font-weight: 600; color: var(--accent); }
+.sm-note .sm-notes { margin: 0; padding: 0; background: none; border: 0; }
 .sm-notes {
   font-size: 13.5px; line-height: 1.7; color: var(--ink);
   padding: 12px 14px; white-space: pre-wrap;
@@ -2275,7 +2279,7 @@ function updateNavActive() {
 // ══════════════════════════════════════════
 
 // 页面里的报错 POST 回 /music/clientlog 写进服务日志，画标签页出的错也直接写在页上。
-const BUILD = '10-27 22:30';   // 版本号：每次上墙改一下，页面打开会把它连同主页间距一起报回 /music/clientlog
+const BUILD = '10-28 02:10';   // 版本号：每次上墙改一下，页面打开会把它连同主页间距一起报回 /music/clientlog
 function reportLayout(tag) {
   try {
     const r = sel => { const e = document.querySelector(sel); if (!e) return null; const b = e.getBoundingClientRect(); return [Math.round(b.left), Math.round(b.top), Math.round(b.bottom)]; };
@@ -2348,7 +2352,9 @@ function pickFloat() {
 }
 function buildFloatCard(n) {
   if (!n) return '';
-  const text = n.notes || n.feeling || (n.favoriteLines && n.favoriteLines[0]) || '';
+  const last = (n.noteLog && n.noteLog.length) ? n.noteLog[n.noteLog.length - 1] : null;
+  const text = (last && last.text) || n.notes || n.feeling || (n.favoriteLines && n.favoriteLines[0]) || '';
+  if (last) { n = Object.assign({}, n, { notedBy: last.by || n.notedBy, notedAt: last.at || n.notedAt }); }
   const who = n.notedBy === 'anko' ? herName() : (n.notedBy === 'fog' || n.notedBy === 'rime' || n.notedBy === 'ai') ? aiName() : (n.notedBy || '');
   let when = '';
   if (n.notedAt) { const d = new Date(n.notedAt); if (!isNaN(d)) when = (d.getMonth() + 1) + '/' + d.getDate(); }
@@ -4188,7 +4194,14 @@ function renderMemory(mv, mem, songId) {
   const sname = (cur && cur.name) || mem.name || '', sartist = (cur && cur.artist) || mem.artist || '';
   let body = `<div class="sm-song">${coverBox(cover, 'sm-song-cover')}<div class="sm-song-info"><div class="sm-song-name">${esc(sname)}</div><div class="sm-song-artist">${esc(sartist)}</div>${meta ? '<div class="sm-meta">' + meta + '</div>' : ''}</div></div>`;
   if (mem.feeling) body += `<div class="sm-feeling">${esc(mem.feeling)}</div>`;
-  if (mem.notes) body += `<div class="sm-sec">批注</div><div class="sm-notes">${esc(mem.notes)}</div>`;
+  const noteLog = (mem.noteLog && mem.noteLog.length) ? mem.noteLog : (mem.notes ? [{ by: mem.notedBy || 'anko', at: mem.notedAt, text: mem.notes }] : []);
+  if (noteLog.length) {
+    body += '<div class="sm-sec">批注</div>';
+    noteLog.forEach(n => {
+      const who = (n.by === 'fog' || n.by === 'rime' || n.by === 'ai') ? aiName() : herName();
+      body += `<div class="sm-note"><div class="sm-note-hd"><span class="sm-note-who">${esc(who)}</span>${n.at ? '<span class="sm-note-when">' + fmtDate(n.at) + '</span>' : ''}</div><div class="sm-notes">${esc(n.text)}</div></div>`;
+    });
+  }
   if (mem.favoriteLines && mem.favoriteLines.length > 0) {
     body += '<div class="sm-sec">记过的句子</div><div class="sm-fav-lines">';
     mem.favoriteLines.forEach(l => { body += `<div class="sm-fav-line">${esc(l)}</div>`; });
@@ -4236,8 +4249,7 @@ function renderMemory(mv, mem, songId) {
       await apiPost('/music/memory', {
         songId,
         action: 'note',
-        // 追加不覆盖：输入框只装新一笔，接在旧批注后面
-        notes: [mem.notes || '', fresh].filter(Boolean).join('\n'),
+        note: fresh,   // 只递新一笔，服务端记成一条（谁、哪天、写了什么）
         favoriteLines: favs,
         tags: document.getElementById('sm-tags-edit').value.split(/\s+/).filter(Boolean),
         name: state.song?.name || mem.name || '',

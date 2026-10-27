@@ -302,12 +302,10 @@ def _memo(song, memo, line=""):
         old = music_get("/music/memory", id=sid).get("memory") or {}
     except Exception:
         pass
-    prev = (old.get("notes") or "").strip()
     line = (line or "").strip()
     if line:
         memo = "「" + line + "」" + memo
-    text = memo if not prev else prev + "\n" + memo
-    body = {"songId": sid, "action": "note", "notes": text, "by": SIGN_AS,
+    body = {"songId": sid, "action": "note", "note": memo, "by": SIGN_AS,   # 只递新一笔，服务端记成一条
             "name": song.get("name", ""), "artist": song.get("artist", "")}
     if line:
         favs = list(old.get("favoriteLines") or [])
