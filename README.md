@@ -59,7 +59,7 @@
 
 > \* 说明：MV 悬浮小窗是系统级画中画（本仓库自带，盖在哪个 App 上都行）；图里底下那层聊天页是我们自己家的前端，不随仓库发布——但它的「一起听」对接层（抽屉、进度药丸、歌曲卡、歌词卡）已浓缩成零依赖示范页 [`examples/chat-demo/`](./examples/chat-demo/)，协议速查也在那页 README 里，接上你家的聊天系统就能长成这样。
 
-再来棚拍全家福（10-27 版，左粉右黑白，同一页两套皮）：
+再来棚拍全家福（10-27 版）。三套皮：左列亮的粉皮、右列暗的黑白皮，最后一行是第三套**自定义皮**（自己传一张底图，浓淡和模糊可调）：
 
 | 🏠 主页 · 网易云头像卡＋两个人的歌单 | 🏠 主页 · 黑白皮 |
 |:--:|:--:|
@@ -68,10 +68,12 @@
 | <img src="screenshots/11-cover-rose.png" width="390" alt="封面页"> | <img src="screenshots/11-cover-mono.png" width="390" alt="封面页 黑白"> |
 | **🎤 歌词页 · 粗体靠左、当下句清楚其它行糊** | **🎤 歌词页 · 黑白皮** |
 | <img src="screenshots/12-lyrics-rose.png" width="390" alt="歌词页"> | <img src="screenshots/12-lyrics-mono.png" width="390" alt="歌词页 黑白"> |
-| **⋯ 抽屉 · 收藏 / 加歌单 / 分享 / 批注 / 评论 / MV / 排布** | **⋯ 抽屉 · 黑白皮** |
-| <img src="screenshots/13-sheet-rose.png" width="390" alt="抽屉"> | <img src="screenshots/13-sheet-mono.png" width="390" alt="抽屉 黑白"> |
+| **📋 歌单详情 · 封面满幅、播放全部** | **⋯ 抽屉 · 收藏 / 加歌单 / 分享 / 批注 / 评论 / MV / 排布** |
+| <img src="screenshots/13-playlist-rose.png" width="390" alt="歌单详情"> | <img src="screenshots/13-sheet-mono.png" width="390" alt="抽屉 黑白"> |
 | **✎ 批注本 · 两个人的听歌回忆** | **💬 歌曲评论区 · 热评＋最新** |
 | <img src="screenshots/14-memo-rose.png" width="390" alt="批注本"> | <img src="screenshots/14-comments-mono.png" width="390" alt="评论区"> |
+| **🎨 自定义皮 · 主页（底图是自己传的）** | **🎨 自定义皮 · 歌词页** |
+| <img src="screenshots/15-custom-home.png" width="390" alt="自定义皮 主页"> | <img src="screenshots/15-custom-lyrics.png" width="390" alt="自定义皮 歌词页"> |
 
 8-31 的旧图还在 `screenshots/01`–`06`，MV 放映厅长什么样看 `06-mv.png`。
 
